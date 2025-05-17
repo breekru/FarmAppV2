@@ -3,6 +3,7 @@
  * 
  * This file contains application-wide JavaScript functionality
  * for the FarmApp livestock management system.
+ * This version works without jQuery dependencies.
  */
 
 // Wait for the DOM to be fully loaded
@@ -33,10 +34,13 @@ document.addEventListener('DOMContentLoaded', function() {
  * Initialize Bootstrap tooltips
  */
 function initTooltips() {
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    tooltipTriggerList.map(function(tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
+    // Check if Bootstrap 5 is available
+    if (typeof bootstrap !== 'undefined') {
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function(tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    }
 }
 
 /**
@@ -164,9 +168,9 @@ function initCharts() {
     if (typeof Chart !== 'undefined') {
         // Animal Type Distribution Chart
         const animalTypeChartElement = document.getElementById('animalTypeChart');
-        if (animalTypeChartElement && animalTypeChartElement.dataset.values) {
-            const labels = JSON.parse(animalTypeChartElement.dataset.labels || '[]');
-            const values = JSON.parse(animalTypeChartElement.dataset.values || '[]');
+        if (animalTypeChartElement) {
+            const labels = animalTypeChartElement.dataset.labels ? JSON.parse(animalTypeChartElement.dataset.labels) : [];
+            const values = animalTypeChartElement.dataset.values ? JSON.parse(animalTypeChartElement.dataset.values) : [];
             const colors = [
                 'rgba(25, 135, 84, 0.7)',    // Green
                 'rgba(13, 110, 253, 0.7)',   // Blue
@@ -200,9 +204,9 @@ function initCharts() {
         
         // Status Distribution Chart
         const statusChartElement = document.getElementById('statusChart');
-        if (statusChartElement && statusChartElement.dataset.values) {
-            const labels = JSON.parse(statusChartElement.dataset.labels || '[]');
-            const values = JSON.parse(statusChartElement.dataset.values || '[]');
+        if (statusChartElement) {
+            const labels = statusChartElement.dataset.labels ? JSON.parse(statusChartElement.dataset.labels) : [];
+            const values = statusChartElement.dataset.values ? JSON.parse(statusChartElement.dataset.values) : [];
             const colors = [
                 'rgba(25, 135, 84, 0.7)',    // Green - Alive
                 'rgba(220, 53, 69, 0.7)',    // Red - Dead
@@ -236,10 +240,10 @@ function initCharts() {
         
         // Monthly Activity Chart
         const activityChartElement = document.getElementById('activityChart');
-        if (activityChartElement && activityChartElement.dataset.values) {
-            const labels = JSON.parse(activityChartElement.dataset.labels || '[]');
-            const added = JSON.parse(activityChartElement.dataset.added || '[]');
-            const sold = JSON.parse(activityChartElement.dataset.sold || '[]');
+        if (activityChartElement) {
+            const labels = activityChartElement.dataset.labels ? JSON.parse(activityChartElement.dataset.labels) : [];
+            const added = activityChartElement.dataset.added ? JSON.parse(activityChartElement.dataset.added) : [];
+            const sold = activityChartElement.dataset.sold ? JSON.parse(activityChartElement.dataset.sold) : [];
             
             new Chart(activityChartElement, {
                 type: 'bar',
