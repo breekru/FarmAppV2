@@ -1,8 +1,4 @@
-
 <?php
-// Add this somewhere to see your current PHP upload settings
-var_dump(ini_get('upload_max_filesize'), ini_get('post_max_size'));
-
 /**
  * Dashboard/Index Page
  * 
