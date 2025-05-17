@@ -114,11 +114,14 @@ function initFormControls() {
  * Initialize DataTables for enhanced table functionality
  */
 function initDataTables() {
-    // Check if DataTables library is loaded
-    if (typeof $.fn.DataTable !== 'undefined') {
+    // Check if jQuery and DataTables are both loaded
+    const jQueryAvailable = typeof jQuery !== 'undefined';
+    const dataTablesAvailable = jQueryAvailable && typeof jQuery.fn.DataTable !== 'undefined';
+    
+    if (dataTablesAvailable) {
         const tables = document.querySelectorAll('.datatable');
         tables.forEach(table => {
-            $(table).DataTable({
+            jQuery(table).DataTable({
                 responsive: true,
                 pageLength: 25,
                 language: {
