@@ -106,7 +106,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $fileName = null;
         if (isset($_FILES['image']) && $_FILES['image']['error'] == 0) {
             $allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
-            $maxSize = 262144; // 2MB max file size
+            $maxSize = 2 * 1024 * 1024; // 2MB max file size
             
             if (in_array($_FILES['image']['type'], $allowedTypes) && $_FILES['image']['size'] <= $maxSize) {
                 $fileName = time() . '_' . basename($_FILES['image']['name']);
