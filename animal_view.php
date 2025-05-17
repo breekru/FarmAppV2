@@ -104,7 +104,7 @@ try {
             </div>
             <div class="col-md-6 text-end">
                 <div class="btn-group">
-                    <a href="edit.php?id=<?= $id ?>" class="btn btn-primary">
+                    <a href="animal_edit.php?id=<?= $id ?>" class="btn btn-primary">
                         <i class="bi bi-pencil"></i> Edit
                     </a>
                     <button type="button" class="btn btn-danger" 
