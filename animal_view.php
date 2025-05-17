@@ -1,14 +1,10 @@
 <?php
 /**
- * Simplified Animal View Page
+ * Animal View Page
  * 
- * A basic version that should work with existing database structure
+ * Displays detailed information about a specific animal.
+ * This version is built specifically for your database structure.
  */
-
-// Display errors for debugging (remove in production)
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
 
 // Include the configuration file
 require_once 'config.php';
@@ -36,13 +32,10 @@ $current_user = $_SESSION["username"];
 // Get database connection
 $db = getDbConnection();
 
-// Basic query to get animal details - using only fields we know exist in the current database
 try {
+    // Fetch the animal data
     $stmt = $db->prepare("
-        SELECT id, type, breed, number, name, gender, offspring, parents, 
-               status, date_purchased, date_sold, sell_price, sell_info,
-               notes, meds, dob, dod, image
-        FROM animals 
+        SELECT * FROM animals 
         WHERE id = :id AND user_id = :user_id
     ");
     $stmt->bindParam(':id', $id, PDO::PARAM_INT);
@@ -58,14 +51,9 @@ try {
     }
 
     // Fetch animal data
-    $animal = $stmt->fetch();
+    $animal = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    // Set page variables
-    $page_title = "View Animal: " . $animal['name'];
-    $page_header = $animal['name'] . " (" . $animal['number'] . ")";
-    $page_subheader = $animal['type'] . " - " . $animal['breed'];
-
-    // Format dates for display
+    // Format dates for display (with null checks)
     $dobFormatted = !empty($animal['dob']) ? date("F j, Y", strtotime($animal['dob'])) : "Unknown";
     $dodFormatted = !empty($animal['dod']) ? date("F j, Y", strtotime($animal['dod'])) : "N/A";
     $purchasedFormatted = !empty($animal['date_purchased']) ? date("F j, Y", strtotime($animal['date_purchased'])) : "N/A";
@@ -77,8 +65,11 @@ try {
         $returnUrl = 'index.php?type=' . urlencode($animal['type']);
     }
 
+    // Set page title
+    $page_title = "View Animal: " . $animal['name'];
+
 } catch (Exception $e) {
-    // Log error and redirect
+    // Log the error
     error_log('Animal View Error: ' . $e->getMessage());
     $_SESSION['alert_message'] = "An error occurred while retrieving animal data.";
     $_SESSION['alert_type'] = "danger";
@@ -92,7 +83,7 @@ try {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $page_title ?? 'View Animal' ?> - FarmApp</title>
+    <title><?= $page_title ?> - FarmApp</title>
     
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -113,7 +104,7 @@ try {
             </div>
             <div class="col-md-6 text-end">
                 <div class="btn-group">
-                    <a href="animal_edit.php?id=<?= $id ?>" class="btn btn-primary">
+                    <a href="edit.php?id=<?= $id ?>" class="btn btn-primary">
                         <i class="bi bi-pencil"></i> Edit
                     </a>
                     <button type="button" class="btn btn-danger" 
@@ -130,8 +121,8 @@ try {
             <div class="col-lg-8">
                 <div class="card shadow-sm mb-4">
                     <div class="card-header d-flex justify-content-between align-items-center">
-                        <h3 class="card-title mb-0">Animal Information</h3>
-                        <span class="badge bg-<?= getStatusBadgeClass($animal['status']) ?> rounded-pill fs-6">
+                        <h3 class="card-title mb-0"><?= htmlspecialchars($animal['name']) ?> (<?= htmlspecialchars($animal['number']) ?>)</h3>
+                        <span class="badge bg-<?= getStatusBadgeClass($animal['status']) ?> rounded-pill">
                             <?= htmlspecialchars($animal['status']) ?>
                         </span>
                     </div>
@@ -170,6 +161,12 @@ try {
                                             <th scope="row">Gender:</th>
                                             <td><?= htmlspecialchars($animal['gender']) ?></td>
                                         </tr>
+                                        <?php if (!empty($animal['color'])): ?>
+                                        <tr>
+                                            <th scope="row">Color:</th>
+                                            <td><?= htmlspecialchars($animal['color']) ?></td>
+                                        </tr>
+                                        <?php endif; ?>
                                         <tr>
                                             <th scope="row">Date of Birth:</th>
                                             <td><?= htmlspecialchars($dobFormatted) ?></td>
@@ -185,33 +182,58 @@ try {
                             </div>
                         </div>
 
-                        <!-- Legacy Lineage Information (using the old text fields) -->
-                        <div class="row">
-                            <div class="col-12">
-                                <h4>Lineage</h4>
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <div class="card mb-3">
-                                            <div class="card-header">Parents</div>
-                                            <div class="card-body">
-                                                <?php if (!empty($animal['parents'])): ?>
-                                                <p><?= nl2br(htmlspecialchars($animal['parents'])) ?></p>
-                                                <?php else: ?>
-                                                <p class="text-muted">No parent information available</p>
-                                                <?php endif; ?>
-                                            </div>
+                        <!-- Registration Information (if available) -->
+                        <?php if (!empty($animal['reg_num']) || !empty($animal['reg_name'])): ?>
+                        <div class="mb-4">
+                            <h4>Registration Information</h4>
+                            <div class="row">
+                                <?php if (!empty($animal['reg_num'])): ?>
+                                <div class="col-md-6">
+                                    <p><strong>Registration Number:</strong> <?= htmlspecialchars($animal['reg_num']) ?></p>
+                                </div>
+                                <?php endif; ?>
+                                <?php if (!empty($animal['reg_name'])): ?>
+                                <div class="col-md-6">
+                                    <p><strong>Registration Name:</strong> <?= htmlspecialchars($animal['reg_name']) ?></p>
+                                </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <?php endif; ?>
+
+                        <!-- Parent Information (if available) -->
+                        <div class="mb-4">
+                            <h4>Lineage</h4>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card mb-3">
+                                        <div class="card-header">Dam (Mother)</div>
+                                        <div class="card-body">
+                                            <?php if (!empty($animal['dam_id'])): ?>
+                                            <p>
+                                                <a href="animal_view.php?id=<?= $animal['dam_id'] ?>">
+                                                    View Dam
+                                                </a>
+                                            </p>
+                                            <?php else: ?>
+                                            <p class="text-muted">No dam information available</p>
+                                            <?php endif; ?>
                                         </div>
                                     </div>
-                                    <div class="col-md-6">
-                                        <div class="card mb-3">
-                                            <div class="card-header">Offspring</div>
-                                            <div class="card-body">
-                                                <?php if (!empty($animal['offspring'])): ?>
-                                                <p><?= nl2br(htmlspecialchars($animal['offspring'])) ?></p>
-                                                <?php else: ?>
-                                                <p class="text-muted">No offspring information available</p>
-                                                <?php endif; ?>
-                                            </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card mb-3">
+                                        <div class="card-header">Sire (Father)</div>
+                                        <div class="card-body">
+                                            <?php if (!empty($animal['sire_id'])): ?>
+                                            <p>
+                                                <a href="animal_view.php?id=<?= $animal['sire_id'] ?>">
+                                                    View Sire
+                                                </a>
+                                            </p>
+                                            <?php else: ?>
+                                            <p class="text-muted">No sire information available</p>
+                                            <?php endif; ?>
                                         </div>
                                     </div>
                                 </div>
@@ -229,17 +251,38 @@ try {
                         <h5 class="card-title mb-0">Purchase & Sale Information</h5>
                     </div>
                     <div class="card-body">
+                        <?php if (!empty($animal['date_purchased']) || !empty($animal['purch_cost'])): ?>
                         <p><strong>Date Purchased:</strong> <?= htmlspecialchars($purchasedFormatted) ?></p>
+                        <?php endif; ?>
                         
-                        <?php if ($animal['status'] === 'Sold'): ?>
+                        <?php if (!empty($animal['purch_cost'])): ?>
+                        <p><strong>Purchase Cost:</strong> $<?= htmlspecialchars($animal['purch_cost']) ?></p>
+                        <?php endif; ?>
+                        
+                        <?php if (!empty($animal['purch_info'])): ?>
+                        <p><strong>Seller Info:</strong> <?= htmlspecialchars($animal['purch_info']) ?></p>
+                        <?php endif; ?>
+                        
+                        <?php if ($animal['status'] === 'Sold' || !empty($animal['date_sold'])): ?>
                         <hr>
                         <p><strong>Date Sold:</strong> <?= htmlspecialchars($soldFormatted) ?></p>
+                        
                         <?php if (!empty($animal['sell_price'])): ?>
                         <p><strong>Sell Price:</strong> $<?= htmlspecialchars($animal['sell_price']) ?></p>
                         <?php endif; ?>
+                        
                         <?php if (!empty($animal['sell_info'])): ?>
                         <p><strong>Buyer Info:</strong> <?= htmlspecialchars($animal['sell_info']) ?></p>
                         <?php endif; ?>
+                        <?php endif; ?>
+                        
+                        <?php if (!empty($animal['for_sale']) && $animal['for_sale'] === 'Yes'): ?>
+                        <div class="alert alert-warning">
+                            <i class="bi bi-tag-fill me-2"></i> This animal is currently for sale
+                            <?php if (!empty($animal['sell_price'])): ?>
+                            for $<?= htmlspecialchars($animal['sell_price']) ?>
+                            <?php endif; ?>
+                        </div>
                         <?php endif; ?>
                     </div>
                 </div>
