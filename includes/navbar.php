@@ -13,7 +13,7 @@ $username = $is_logged_in ? htmlspecialchars($_SESSION["username"]) : '';
     <div class="container-fluid">
         <!-- Brand -->
         <a class="navbar-brand" href="index.php">
-            <img src="assets/img/logo_small.png" alt="FarmApp" height="30" class="d-inline-block align-text-top me-2">
+            <img src="assets/img/logo.png" alt="FarmApp" height="30" class="d-inline-block align-text-top me-2">
             FarmApp
         </a>
         
