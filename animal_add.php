@@ -1,6 +1,6 @@
 <?php
 /**
- * Animal Add Page
+ * Animal Add Page - FIXED
  * 
  * This page allows users to add a new animal to their inventory.
  * With improved image upload handling.
@@ -89,8 +89,66 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $fileName = null;
     
     if (isset($_FILES['image']) && $_FILES['image']['error'] != UPLOAD_ERR_NO_FILE) {
-        // Image upload handling code remains the same
-        // ...
+        // Debug image upload
+        error_log("Image upload info: " . print_r($_FILES['image'], true));
+        
+        // Make sure uploads directory exists
+        $uploadDir = 'assets/img/animals/';
+        if (!file_exists($uploadDir)) {
+            if (!mkdir($uploadDir, 0755, true)) {
+                $errors[] = "Failed to create upload directory. Please contact the administrator.";
+            }
+        }
+        
+        // Check for upload errors
+        if ($_FILES['image']['error'] !== UPLOAD_ERR_OK) {
+            switch ($_FILES['image']['error']) {
+                case UPLOAD_ERR_INI_SIZE:
+                case UPLOAD_ERR_FORM_SIZE:
+                    $errors[] = "The uploaded file exceeds the maximum allowed size.";
+                    break;
+                case UPLOAD_ERR_PARTIAL:
+                    $errors[] = "The file was only partially uploaded.";
+                    break;
+                case UPLOAD_ERR_NO_TMP_DIR:
+                    $errors[] = "Missing a temporary folder on the server.";
+                    break;
+                case UPLOAD_ERR_CANT_WRITE:
+                    $errors[] = "Failed to write file to disk.";
+                    break;
+                case UPLOAD_ERR_EXTENSION:
+                    $errors[] = "A PHP extension stopped the file upload.";
+                    break;
+                default:
+                    $errors[] = "Unknown upload error occurred.";
+            }
+        } else {
+            // Check file type
+            $allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+            $fileType = $_FILES['image']['type'];
+            
+            if (!in_array($fileType, $allowedTypes)) {
+                $errors[] = "Invalid file type. Only JPEG, PNG, and GIF images are allowed.";
+            } else {
+                // Check file size (limit to 5MB)
+                $maxSize = 5 * 1024 * 1024;
+                if ($_FILES['image']['size'] > $maxSize) {
+                    $errors[] = "File is too large. Maximum size is 5MB.";
+                } else {
+                    // Generate unique filename
+                    $fileExt = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION);
+                    $fileName = time() . '_' . uniqid() . '.' . $fileExt;
+                    $uploadPath = $uploadDir . $fileName;
+                    
+                    // Attempt to move the uploaded file
+                    if (!move_uploaded_file($_FILES['image']['tmp_name'], $uploadPath)) {
+                        $errors[] = "Failed to move uploaded file. Check directory permissions.";
+                        error_log("Failed to move uploaded file to: $uploadPath");
+                        $fileName = null;
+                    }
+                }
+            }
+        }
     }
     
     // If no errors, add the animal
@@ -176,7 +234,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         }
     }
 }
-Could not connect to the reCAPTCHA service. Please check your internet connection and reload to get a reCAPTCHA challenge.
 
 // Get parent options for selection
 try {
@@ -253,6 +310,7 @@ try {
             <div class="card-body">
                 <form action="animal_add.php" method="post" enctype="multipart/form-data">
                     <div class="row">
+                        <!-- Form content remains the same -->
                         <!-- Basic Information -->
                         <div class="col-md-6">
                             <h4>Basic Information</h4>
@@ -464,79 +522,10 @@ try {
     <!-- Bootstrap Bundle with Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
-    <!-- Custom JavaScript for dynamic form fields -->
+    <!-- Fixed Script for Status-Dependent Fields -->
     <script>
     document.addEventListener('DOMContentLoaded', function() {
         // Show/hide fields based on status selection
-        const statusSelect = document.getElementById('status');
-        const statusDependentFields = document.querySelectorAll('.status-dependent');
-        
-        function updateFieldVisibility() {
-            const selectedStatus = statusSelect.value;
-            
-            statusDependentFields.forEach(field => {
-                const statusValues = field.getAttribute('data-status').split(',');
-                if (statusValues.includes(selectedStatus)) {
-                    field.style.display = 'block';
-                } else {
-                    field.style.display = 'none';
-                }
-            });
-        }
-        
-        // Initial update
-        updateFieldVisibility();
-        
-        // Update on status change
-        statusSelect.addEventListener('change', updateFieldVisibility);
-        
-        // Dynamic behavior for the for-sale toggle
-        const forSaleSelect = document.getElementById('for_sale');
-        
-        forSaleSelect.addEventListener('change', function() {
-            if (this.value === 'Yes') {
-                // If marked for sale, update status
-                statusSelect.value = 'For Sale';
-                updateFieldVisibility();
-            }
-        });
-        
-        // Also update for_sale based on status
-        statusSelect.addEventListener('change', function() {
-            if (this.value === 'For Sale') {
-                forSaleSelect.value = 'Yes';
-            } else if (this.value === 'Sold') {
-                forSaleSelect.value = 'Has Been Sold';
-            } else if (forSaleSelect.value === 'Yes') {
-                // If status changed from 'For Sale' to something else, update for_sale
-                forSaleSelect.value = 'No';
-            }
-        });
-        
-        // Image preview
-        const imageInput = document.getElementById('image');
-        const imagePreview = document.getElementById('imagePreview');
-        
-        imageInput.addEventListener('change', function() {
-            if (this.files && this.files[0]) {
-                const reader = new FileReader();
-                
-                reader.onload = function(e) {
-                    imagePreview.innerHTML = `<img src="${e.target.result}" class="img-fluid img-thumbnail" style="max-height: 200px;">`;
-                    imagePreview.style.display = 'block';
-                };
-                
-                reader.readAsDataURL(this.files[0]);
-            } else {
-                imagePreview.innerHTML = '';
-                imagePreview.style.display = 'none';
-            }
-        });
-    });
-
-    // This script fixes the issue with status-dependent fields for both edit and add pages
-    document.addEventListener('DOMContentLoaded', function() {
-    // Show/hide fields based on status selection
         const statusSelect = document.getElementById('status');
         const statusDependentFields = document.querySelectorAll('.status-dependent');
         
@@ -583,6 +572,28 @@ try {
                     }
                 });
             }
+        }
+        
+        // Image preview
+        const imageInput = document.getElementById('image');
+        const imagePreview = document.getElementById('imagePreview');
+        
+        if (imageInput && imagePreview) {
+            imageInput.addEventListener('change', function() {
+                if (this.files && this.files[0]) {
+                    const reader = new FileReader();
+                    
+                    reader.onload = function(e) {
+                        imagePreview.innerHTML = `<img src="${e.target.result}" class="img-fluid img-thumbnail" style="max-height: 200px;">`;
+                        imagePreview.style.display = 'block';
+                    };
+                    
+                    reader.readAsDataURL(this.files[0]);
+                } else {
+                    imagePreview.innerHTML = '';
+                    imagePreview.style.display = 'none';
+                }
+            });
         }
     });
     </script>

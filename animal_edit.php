@@ -1,6 +1,6 @@
 <?php
 /**
- * Animal Edit Page
+ * Animal Edit Page - FIXED
  * 
  * This page allows users to edit an existing animal's information.
  */
@@ -83,13 +83,6 @@ $sireStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
 $sireStmt->bindParam(':id', $id, PDO::PARAM_INT);
 $sireStmt->execute();
 $sires = $sireStmt->fetchAll();
-
-// Process form submission
-<?php
-/**
- * Fixed version of the form processing section in animal_edit.php
- * This addresses the 500 errors with notes and medication fields
- */
 
 // Process form submission
 $errors = [];
@@ -509,33 +502,8 @@ include_once 'includes/header.php';
     </div>
 </div>
 
+<!-- Fixed Script for Status-Dependent Fields -->
 <script>
-// Show/hide fields based on status selection
-document.addEventListener('DOMContentLoaded', function() {
-    const statusSelect = document.getElementById('status');
-    const statusDependentFields = document.querySelectorAll('.status-dependent');
-    
-    function updateFieldVisibility() {
-        const selectedStatus = statusSelect.value;
-        
-        statusDependentFields.forEach(field => {
-            const statusValues = field.getAttribute('data-status').split(',');
-            if (statusValues.includes(selectedStatus)) {
-                field.style.display = 'block';
-            } else {
-                field.style.display = 'none';
-            }
-        });
-    }
-    
-    // Initial update
-    updateFieldVisibility();
-    
-    // Update on status change
-    statusSelect.addEventListener('change', updateFieldVisibility);
-});
-
-// This script fixes the issue with status-dependent fields for both edit and add pages
 document.addEventListener('DOMContentLoaded', function() {
     // Show/hide fields based on status selection
     const statusSelect = document.getElementById('status');
@@ -586,7 +554,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 });
-
 </script>
 
 <?php
