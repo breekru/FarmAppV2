@@ -23,7 +23,8 @@ $current_user = $_SESSION["username"];
 $db = getDbConnection();
 
 // Process filters
-$type = isset($_GET['type']) ? $_GET['type'] : '';
+//$type = isset($_GET['type']) ? $_GET['type'] : '';
+$type = isset($_GET['type']) && !empty($_GET['type']) ? $_GET['type'] : '';
 $status = isset($_GET['status']) ? $_GET['status'] : '';
 $gender = isset($_GET['gender']) ? $_GET['gender'] : '';
 
@@ -141,7 +142,8 @@ include_once 'includes/header.php';
             </div>
             <div class="card-body">
                 <form action="" method="get" class="row g-3">
-                    <div class="col-md-4">
+
+                <div class="col-md-4">
                         <label for="type" class="form-label">Animal Type</label>
                         <select id="type" name="type" class="form-select">
                             <option value="">All Types</option>
