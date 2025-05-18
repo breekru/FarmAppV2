@@ -346,6 +346,18 @@ include_once 'includes/header.php';
     </div>
 </div>
 
+const breedData = {
+<?php 
+    foreach ($breedData as $type => $data) {
+        echo "'" . $type . "': {";
+        echo "labels: ['" . implode("', '", $data['labels']) . "'],";
+        echo "data: [" . implode(", ", $data['data']) . "]";
+        echo "},\n";
+    }
+?>
+};
+
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
