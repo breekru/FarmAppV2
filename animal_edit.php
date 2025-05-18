@@ -85,33 +85,43 @@ $sireStmt->execute();
 $sires = $sireStmt->fetchAll();
 
 // Process form submission
+<?php
+/**
+ * Fixed version of the form processing section in animal_edit.php
+ * This addresses the 500 errors with notes and medication fields
+ */
+
+// Process form submission
 $errors = [];
 $success = false;
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // Get form data and sanitize
-    $type = filter_input(INPUT_POST, 'type', FILTER_SANITIZE_STRING);
-    $breed = filter_input(INPUT_POST, 'breed', FILTER_SANITIZE_STRING);
-    $number = filter_input(INPUT_POST, 'number', FILTER_SANITIZE_STRING);
-    $name = filter_input(INPUT_POST, 'name', FILTER_SANITIZE_STRING);
-    $gender = filter_input(INPUT_POST, 'gender', FILTER_SANITIZE_STRING);
-    $dob = filter_input(INPUT_POST, 'dob', FILTER_SANITIZE_STRING);
-    $dod = filter_input(INPUT_POST, 'dod', FILTER_SANITIZE_STRING) ?: null;
+    $type = filter_input(INPUT_POST, 'type', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+    $breed = filter_input(INPUT_POST, 'breed', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+    $number = filter_input(INPUT_POST, 'number', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+    $name = filter_input(INPUT_POST, 'name', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+    $gender = filter_input(INPUT_POST, 'gender', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+    $dob = filter_input(INPUT_POST, 'dob', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+    $dod = filter_input(INPUT_POST, 'dod', FILTER_SANITIZE_FULL_SPECIAL_CHARS) ?: null;
     $dam_id = filter_input(INPUT_POST, 'dam_id', FILTER_SANITIZE_NUMBER_INT) ?: null;
     $sire_id = filter_input(INPUT_POST, 'sire_id', FILTER_SANITIZE_NUMBER_INT) ?: null;
-    $status = filter_input(INPUT_POST, 'status', FILTER_SANITIZE_STRING);
-    $date_purchased = filter_input(INPUT_POST, 'date_purchased', FILTER_SANITIZE_STRING) ?: null;
-    $date_sold = filter_input(INPUT_POST, 'date_sold', FILTER_SANITIZE_STRING) ?: null;
-    $sell_price = filter_input(INPUT_POST, 'sell_price', FILTER_SANITIZE_STRING) ?: null;
-    $sell_info = filter_input(INPUT_POST, 'sell_info', FILTER_SANITIZE_STRING);
-    $purch_cost = filter_input(INPUT_POST, 'purch_cost', FILTER_SANITIZE_STRING) ?: null;
-    $purch_info = filter_input(INPUT_POST, 'purch_info', FILTER_SANITIZE_STRING);
-    $notes = filter_input(INPUT_POST, 'notes', FILTER_SANITIZE_STRING);
-    $meds = filter_input(INPUT_POST, 'meds', FILTER_SANITIZE_STRING);
-    $for_sale = filter_input(INPUT_POST, 'for_sale', FILTER_SANITIZE_STRING);
-    $reg_num = filter_input(INPUT_POST, 'reg_num', FILTER_SANITIZE_STRING);
-    $reg_name = filter_input(INPUT_POST, 'reg_name', FILTER_SANITIZE_STRING);
-    $color = filter_input(INPUT_POST, 'color', FILTER_SANITIZE_STRING);
+    $status = filter_input(INPUT_POST, 'status', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+    $date_purchased = filter_input(INPUT_POST, 'date_purchased', FILTER_SANITIZE_FULL_SPECIAL_CHARS) ?: null;
+    $date_sold = filter_input(INPUT_POST, 'date_sold', FILTER_SANITIZE_FULL_SPECIAL_CHARS) ?: null;
+    $sell_price = filter_input(INPUT_POST, 'sell_price', FILTER_SANITIZE_FULL_SPECIAL_CHARS) ?: null;
+    $sell_info = filter_input(INPUT_POST, 'sell_info', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+    $purch_cost = filter_input(INPUT_POST, 'purch_cost', FILTER_SANITIZE_FULL_SPECIAL_CHARS) ?: null;
+    $purch_info = filter_input(INPUT_POST, 'purch_info', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+    
+    // FIX: Better handling for notes and medication fields
+    $notes = isset($_POST['notes']) ? trim($_POST['notes']) : '';
+    $meds = isset($_POST['meds']) ? trim($_POST['meds']) : '';
+    
+    $for_sale = filter_input(INPUT_POST, 'for_sale', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+    $reg_num = filter_input(INPUT_POST, 'reg_num', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+    $reg_name = filter_input(INPUT_POST, 'reg_name', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+    $color = filter_input(INPUT_POST, 'color', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
     
     // Validate required fields
     if (empty($type)) {
@@ -129,98 +139,107 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     
     // If no errors, update the animal
     if (empty($errors)) {
-        // Prepare the SQL statement
-        $updateQuery = "
-            UPDATE animals SET
-                type = :type,
-                breed = :breed,
-                number = :number,
-                name = :name,
-                gender = :gender,
-                dob = :dob,
-                dod = :dod,
-                dam_id = :dam_id,
-                sire_id = :sire_id,
-                status = :status,
-                date_purchased = :date_purchased,
-                date_sold = :date_sold,
-                sell_price = :sell_price,
-                sell_info = :sell_info,
-                purch_cost = :purch_cost,
-                purch_info = :purch_info,
-                notes = :notes,
-                meds = :meds,
-                for_sale = :for_sale,
-                reg_num = :reg_num,
-                reg_name = :reg_name,
-                color = :color,
-                updated_at = NOW()
-            WHERE id = :id AND user_id = :user_id
-        ";
-        
-        $updateStmt = $db->prepare($updateQuery);
-        $updateStmt->bindParam(':type', $type);
-        $updateStmt->bindParam(':breed', $breed);
-        $updateStmt->bindParam(':number', $number);
-        $updateStmt->bindParam(':name', $name);
-        $updateStmt->bindParam(':gender', $gender);
-        $updateStmt->bindParam(':dob', $dob);
-        $updateStmt->bindParam(':dod', $dod);
-        $updateStmt->bindParam(':dam_id', $dam_id);
-        $updateStmt->bindParam(':sire_id', $sire_id);
-        $updateStmt->bindParam(':status', $status);
-        $updateStmt->bindParam(':date_purchased', $date_purchased);
-        $updateStmt->bindParam(':date_sold', $date_sold);
-        $updateStmt->bindParam(':sell_price', $sell_price);
-        $updateStmt->bindParam(':sell_info', $sell_info);
-        $updateStmt->bindParam(':purch_cost', $purch_cost);
-        $updateStmt->bindParam(':purch_info', $purch_info);
-        $updateStmt->bindParam(':notes', $notes);
-        $updateStmt->bindParam(':meds', $meds);
-        $updateStmt->bindParam(':for_sale', $for_sale);
-        $updateStmt->bindParam(':reg_num', $reg_num);
-        $updateStmt->bindParam(':reg_name', $reg_name);
-        $updateStmt->bindParam(':color', $color);
-        $updateStmt->bindParam(':id', $id);
-        $updateStmt->bindParam(':user_id', $current_user);
-        
-        // Handle image upload if a new image was provided
-        if (isset($_FILES['image']) && $_FILES['image']['error'] == 0) {
-            $allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
-            $maxSize = 2 * 1024 * 1024; // 2MB max file size
+        try {
+            // Prepare the SQL statement
+            $updateQuery = "
+                UPDATE animals SET
+                    type = :type,
+                    breed = :breed,
+                    number = :number,
+                    name = :name,
+                    gender = :gender,
+                    dob = :dob,
+                    dod = :dod,
+                    dam_id = :dam_id,
+                    sire_id = :sire_id,
+                    status = :status,
+                    date_purchased = :date_purchased,
+                    date_sold = :date_sold,
+                    sell_price = :sell_price,
+                    sell_info = :sell_info,
+                    purch_cost = :purch_cost,
+                    purch_info = :purch_info,
+                    notes = :notes,
+                    meds = :meds,
+                    for_sale = :for_sale,
+                    reg_num = :reg_num,
+                    reg_name = :reg_name,
+                    color = :color,
+                    updated_at = NOW()
+                WHERE id = :id AND user_id = :user_id
+            ";
             
-            if (in_array($_FILES['image']['type'], $allowedTypes) && $_FILES['image']['size'] <= $maxSize) {
-                $fileName = time() . '_' . basename($_FILES['image']['name']);
-                $uploadPath = 'assets/img/animals/' . $fileName;
+            $updateStmt = $db->prepare($updateQuery);
+            $updateStmt->bindParam(':type', $type);
+            $updateStmt->bindParam(':breed', $breed);
+            $updateStmt->bindParam(':number', $number);
+            $updateStmt->bindParam(':name', $name);
+            $updateStmt->bindParam(':gender', $gender);
+            $updateStmt->bindParam(':dob', $dob);
+            $updateStmt->bindParam(':dod', $dod);
+            $updateStmt->bindParam(':dam_id', $dam_id);
+            $updateStmt->bindParam(':sire_id', $sire_id);
+            $updateStmt->bindParam(':status', $status);
+            $updateStmt->bindParam(':date_purchased', $date_purchased);
+            $updateStmt->bindParam(':date_sold', $date_sold);
+            $updateStmt->bindParam(':sell_price', $sell_price);
+            $updateStmt->bindParam(':sell_info', $sell_info);
+            $updateStmt->bindParam(':purch_cost', $purch_cost);
+            $updateStmt->bindParam(':purch_info', $purch_info);
+            
+            // FIX: Correctly bind notes and meds as PDO::PARAM_STR
+            $updateStmt->bindParam(':notes', $notes, PDO::PARAM_STR);
+            $updateStmt->bindParam(':meds', $meds, PDO::PARAM_STR);
+            
+            $updateStmt->bindParam(':for_sale', $for_sale);
+            $updateStmt->bindParam(':reg_num', $reg_num);
+            $updateStmt->bindParam(':reg_name', $reg_name);
+            $updateStmt->bindParam(':color', $color);
+            $updateStmt->bindParam(':id', $id);
+            $updateStmt->bindParam(':user_id', $current_user);
+            
+            // Handle image upload if a new image was provided
+            if (isset($_FILES['image']) && $_FILES['image']['error'] == 0) {
+                $allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+                $maxSize = 2 * 1024 * 1024; // 2MB max file size
                 
-                if (move_uploaded_file($_FILES['image']['tmp_name'], $uploadPath)) {
-                    // Update the image field in the database
-                    $updateStmt = $db->prepare("
-                        UPDATE animals SET image = :image WHERE id = :id AND user_id = :user_id
-                    ");
-                    $updateStmt->bindParam(':image', $fileName);
-                    $updateStmt->bindParam(':id', $id);
-                    $updateStmt->bindParam(':user_id', $current_user);
-                    $updateStmt->execute();
+                if (in_array($_FILES['image']['type'], $allowedTypes) && $_FILES['image']['size'] <= $maxSize) {
+                    $fileName = time() . '_' . basename($_FILES['image']['name']);
+                    $uploadPath = 'assets/img/animals/' . $fileName;
+                    
+                    if (move_uploaded_file($_FILES['image']['tmp_name'], $uploadPath)) {
+                        // Update the image field in the database
+                        $imageStmt = $db->prepare("
+                            UPDATE animals SET image = :image WHERE id = :id AND user_id = :user_id
+                        ");
+                        $imageStmt->bindParam(':image', $fileName);
+                        $imageStmt->bindParam(':id', $id);
+                        $imageStmt->bindParam(':user_id', $current_user);
+                        $imageStmt->execute();
+                    } else {
+                        $errors[] = "Failed to upload image. Please try again.";
+                    }
                 } else {
-                    $errors[] = "Failed to upload image. Please try again.";
+                    $errors[] = "Invalid image. Please upload a JPEG, PNG, or GIF file under 2MB.";
                 }
-            } else {
-                $errors[] = "Invalid image. Please upload a JPEG, PNG, or GIF file under 2MB.";
             }
-        }
-        
-        // Execute the update statement
-        if ($updateStmt->execute()) {
-            $success = true;
-            $_SESSION['alert_message'] = "Animal information updated successfully!";
-            $_SESSION['alert_type'] = "success";
             
-            // Redirect to animal view page
-            header("location: animal_view.php?id=" . $id);
-            exit;
-        } else {
-            $errors[] = "An error occurred while updating the animal. Please try again.";
+            // FIX: Better error handling for execute
+            if (!$updateStmt->execute()) {
+                $errors[] = "Database error: " . implode(", ", $updateStmt->errorInfo());
+                error_log("Update animal error: " . print_r($updateStmt->errorInfo(), true));
+            } else {
+                $success = true;
+                $_SESSION['alert_message'] = "Animal information updated successfully!";
+                $_SESSION['alert_type'] = "success";
+                
+                // Redirect to animal view page
+                header("location: animal_view.php?id=" . $id);
+                exit;
+            }
+        } catch (Exception $e) {
+            $errors[] = "An error occurred: " . $e->getMessage();
+            error_log("Exception in animal_edit.php: " . $e->getMessage());
         }
     }
 }
@@ -515,6 +534,59 @@ document.addEventListener('DOMContentLoaded', function() {
     // Update on status change
     statusSelect.addEventListener('change', updateFieldVisibility);
 });
+
+// This script fixes the issue with status-dependent fields for both edit and add pages
+document.addEventListener('DOMContentLoaded', function() {
+    // Show/hide fields based on status selection
+    const statusSelect = document.getElementById('status');
+    const statusDependentFields = document.querySelectorAll('.status-dependent');
+    
+    function updateFieldVisibility() {
+        const selectedStatus = statusSelect.value;
+        
+        statusDependentFields.forEach(field => {
+            const statusValues = field.getAttribute('data-status').split(',');
+            if (statusValues.includes(selectedStatus)) {
+                field.style.display = 'block';
+            } else {
+                field.style.display = 'none';
+            }
+        });
+        
+        // Update for_sale dropdown based on status
+        const forSaleSelect = document.getElementById('for_sale');
+        if (forSaleSelect) {
+            if (selectedStatus === 'For Sale') {
+                forSaleSelect.value = 'Yes';
+            } else if (selectedStatus === 'Sold') {
+                forSaleSelect.value = 'Has Been Sold';
+            } else if (forSaleSelect.value === 'Yes' && selectedStatus !== 'For Sale') {
+                forSaleSelect.value = 'No';
+            }
+        }
+    }
+    
+    // Initial update
+    if (statusSelect) {
+        updateFieldVisibility();
+        
+        // Update on status change
+        statusSelect.addEventListener('change', updateFieldVisibility);
+        
+        // Dynamic behavior for the for-sale toggle
+        const forSaleSelect = document.getElementById('for_sale');
+        if (forSaleSelect) {
+            forSaleSelect.addEventListener('change', function() {
+                if (this.value === 'Yes') {
+                    // If marked for sale, update status
+                    statusSelect.value = 'For Sale';
+                    updateFieldVisibility();
+                }
+            });
+        }
+    }
+});
+
 </script>
 
 <?php
