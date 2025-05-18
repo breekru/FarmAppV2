@@ -361,6 +361,16 @@ const breedData = {
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Define breedData object first
+    const breedData = {};
+    
+    <?php foreach ($breedData as $type => $data): ?>
+    breedData['<?= $type ?>'] = {
+        labels: [<?= "'" . implode("', '", $data['labels']) . "'" ?>],
+        data: [<?= implode(", ", $data['data']) ?>]
+    };
+    <?php endforeach; ?>
+    
     // Type Chart
     const typeCtx = document.getElementById('typeChart');
     const typeLabels = [<?php 
@@ -470,77 +480,78 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-// Export to CSV functionality
-document.getElementById('exportCSV').addEventListener('click', function() {
-    try {
-        // Get table data
-        const table = document.getElementById('inventory-table');
-        if (!table) {
-            console.error("Table with ID 'inventory-table' not found");
-            alert("Could not find inventory table for export");
-            return;
-        }
-        
-        let csvContent = [];
-        const rows = table.querySelectorAll('tr');
-        
-        // Process each row
-        for (let i = 0; i < rows.length; i++) {
-            const rowData = [];
-            const cells = rows[i].querySelectorAll('td, th');
-            
-            // Process all cells except the last one (Actions column)
-            for (let j = 0; j < cells.length - 1; j++) {
-                // Get text content only (strips HTML)
-                let cellText = cells[j].textContent.trim();
-                
-                // Handle special case for status badges (just extract the status text)
-                if (cells[j].querySelector('.badge')) {
-                    cellText = cells[j].querySelector('.badge').textContent.trim();
-                }
-                
-                // Escape quotes and wrap in quotes
-                cellText = '"' + cellText.replace(/"/g, '""') + '"';
-                rowData.push(cellText);
+    // Export to CSV functionality
+    document.getElementById('exportCSV').addEventListener('click', function() {
+        try {
+            // Get table data
+            const table = document.getElementById('inventory-table');
+            if (!table) {
+                console.error("Table with ID 'inventory-table' not found");
+                alert("Could not find inventory table for export");
+                return;
             }
             
-            csvContent.push(rowData.join(','));
+            let csvContent = [];
+            const rows = table.querySelectorAll('tr');
+            
+            // Process each row
+            for (let i = 0; i < rows.length; i++) {
+                const rowData = [];
+                const cells = rows[i].querySelectorAll('td, th');
+                
+                // Process all cells except the last one (Actions column)
+                for (let j = 0; j < cells.length - 1; j++) {
+                    // Get text content only (strips HTML)
+                    let cellText = cells[j].textContent.trim();
+                    
+                    // Handle special case for status badges (just extract the status text)
+                    if (cells[j].querySelector('.badge')) {
+                        cellText = cells[j].querySelector('.badge').textContent.trim();
+                    }
+                    
+                    // Escape quotes and wrap in quotes
+                    cellText = '"' + cellText.replace(/"/g, '""') + '"';
+                    rowData.push(cellText);
+                }
+                
+                csvContent.push(rowData.join(','));
+            }
+            
+            // Join rows with newlines
+            const csvString = csvContent.join('\n');
+            
+            // Generate filename with current date
+            const filename = 'farm_inventory_' + new Date().toISOString().slice(0, 10) + '.csv';
+            
+            // Create download
+            const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+            
+            // Create download link
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            
+            // Set up and trigger download
+            link.setAttribute('href', url);
+            link.setAttribute('download', filename);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            
+            // Trigger download and clean up
+            console.log("Initiating download of CSV file: " + filename);
+            link.click();
+            
+            // Clean up
+            setTimeout(function() {
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(url);
+            }, 100);
+            
+            console.log("CSV export completed");
+        } catch (error) {
+            console.error("Error exporting CSV:", error);
+            alert("Error exporting CSV: " + error.message);
         }
-        
-        // Join rows with newlines
-        const csvString = csvContent.join('\n');
-        
-        // Generate filename with current date
-        const filename = 'farm_inventory_' + new Date().toISOString().slice(0, 10) + '.csv';
-        
-        // Create download
-        const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
-        
-        // Create download link
-        const link = document.createElement('a');
-        const url = URL.createObjectURL(blob);
-        
-        // Set up and trigger download
-        link.setAttribute('href', url);
-        link.setAttribute('download', filename);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        
-        // Trigger download and clean up
-        console.log("Initiating download of CSV file: " + filename);
-        link.click();
-        
-        // Clean up
-        setTimeout(function() {
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(url);
-        }, 100);
-        
-        console.log("CSV export completed");
-    } catch (error) {
-        console.error("Error exporting CSV:", error);
-        alert("Error exporting CSV: " + error.message);
-    }
+    });
 });
 </script>
 
