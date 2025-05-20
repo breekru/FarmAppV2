@@ -71,7 +71,7 @@ $availableTypes = $typesStmt->fetchAll();
 
 // Function to get parent information
 function getParentInfo($db, $parent_id, $current_user) {
-    if (!$parent_id) {
+    if (!$parent_id || $parent_id <= 0) {
         return [
             'id' => null,
             'name' => 'Unknown',
@@ -82,27 +82,32 @@ function getParentInfo($db, $parent_id, $current_user) {
         ];
     }
     
-    $stmt = $db->prepare("
-        SELECT id, name, number, breed, gender, status 
-        FROM animals 
-        WHERE id = :id AND user_id = :user_id
-    ");
-    $stmt->bindParam(':id', $parent_id, PDO::PARAM_INT);
-    $stmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
-    $stmt->execute();
-    
-    if ($stmt->rowCount() > 0) {
-        return $stmt->fetch(PDO::FETCH_ASSOC);
-    } else {
-        return [
-            'id' => null,
-            'name' => 'Unknown',
-            'number' => '---',
-            'breed' => 'Unknown',
-            'gender' => 'Unknown',
-            'status' => 'Unknown'
-        ];
+    try {
+        $stmt = $db->prepare("
+            SELECT id, name, number, breed, gender, status 
+            FROM animals 
+            WHERE id = :id AND user_id = :user_id
+        ");
+        $stmt->bindParam(':id', $parent_id, PDO::PARAM_INT);
+        $stmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
+        $stmt->execute();
+        
+        if ($stmt->rowCount() > 0) {
+            return $stmt->fetch(PDO::FETCH_ASSOC);
+        }
+    } catch (Exception $e) {
+        // Log error but continue with default values
+        error_log('Lineage Report Error (Parent Info): ' . $e->getMessage());
     }
+    
+    return [
+        'id' => null,
+        'name' => 'Unknown',
+        'number' => '---',
+        'breed' => 'Unknown',
+        'gender' => 'Unknown',
+        'status' => 'Unknown'
+    ];
 }
 
 // Get parent and grandparent information if we have an animal
@@ -159,14 +164,23 @@ if ($animal) {
 // Get offspring of selected animal
 $offspring = [];
 if ($animal) {
-    $parentField = $animal['gender'] === 'Female' ? 'dam_id' : 'sire_id';
+    // Using a safe approach without variable interpolation in the query
+    if ($animal['gender'] === 'Female') {
+        $offspringStmt = $db->prepare("
+            SELECT id, name, number, gender, breed, dob, status 
+            FROM animals 
+            WHERE dam_id = :parent_id AND user_id = :user_id 
+            ORDER BY dob DESC, name ASC
+        ");
+    } else {
+        $offspringStmt = $db->prepare("
+            SELECT id, name, number, gender, breed, dob, status 
+            FROM animals 
+            WHERE sire_id = :parent_id AND user_id = :user_id 
+            ORDER BY dob DESC, name ASC
+        ");
+    }
     
-    $offspringStmt = $db->prepare("
-        SELECT id, name, number, gender, breed, dob, status 
-        FROM animals 
-        WHERE $parentField = :parent_id AND user_id = :user_id 
-        ORDER BY dob DESC, name ASC
-    ");
     $offspringStmt->bindParam(':parent_id', $animal_id, PDO::PARAM_INT);
     $offspringStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
     $offspringStmt->execute();
@@ -175,70 +189,99 @@ if ($animal) {
 }
 
 // Get animals with offspring (breeding stock)
-$breedingStockQuery = "
-    SELECT DISTINCT a.id, a.name, a.number, a.type, a.breed, a.gender, a.status
-    FROM animals a
-    INNER JOIN animals o ON (o.dam_id = a.id OR o.sire_id = a.id)
-    WHERE a.user_id = :user_id
-";
+$breedingStock = [];
+try {
+    $breedingStockQuery = "
+        SELECT DISTINCT a.id, a.name, a.number, a.type, a.breed, a.gender, a.status
+        FROM animals a
+        WHERE a.user_id = :user_id
+        AND (
+            EXISTS (SELECT 1 FROM animals o WHERE o.dam_id = a.id AND o.user_id = :user_id2)
+            OR 
+            EXISTS (SELECT 1 FROM animals o WHERE o.sire_id = a.id AND o.user_id = :user_id3)
+        )
+    ";
 
-if ($animal_type) {
-    $breedingStockQuery .= " AND a.type = :type";
+    if ($animal_type) {
+        $breedingStockQuery .= " AND a.type = :type";
+    }
+
+    $breedingStockQuery .= " ORDER BY a.type, a.name";
+
+    $breedingStockStmt = $db->prepare($breedingStockQuery);
+    $breedingStockStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
+    $breedingStockStmt->bindParam(':user_id2', $current_user, PDO::PARAM_STR);
+    $breedingStockStmt->bindParam(':user_id3', $current_user, PDO::PARAM_STR);
+
+    if ($animal_type) {
+        $breedingStockStmt->bindParam(':type', $animal_type, PDO::PARAM_STR);
+    }
+
+    $breedingStockStmt->execute();
+    $breedingStock = $breedingStockStmt->fetchAll();
+
+    // Get count of offspring for each breeding animal
+    foreach ($breedingStock as &$animal) {
+        $animal['offspring_count'] = 0; // Default value
+        
+        $offspringCountStmt = $db->prepare("
+            SELECT COUNT(*) as count 
+            FROM animals 
+            WHERE (dam_id = :id OR sire_id = :id) AND user_id = :user_id
+        ");
+        $offspringCountStmt->bindParam(':id', $animal['id'], PDO::PARAM_INT);
+        $offspringCountStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
+        $offspringCountStmt->execute();
+        $countResult = $offspringCountStmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($countResult && isset($countResult['count'])) {
+            $animal['offspring_count'] = $countResult['count'];
+        }
+    }
+    unset($animal); // Break the reference
+} catch (Exception $e) {
+    // Log error
+    error_log('Lineage Report Error (Breeding Stock): ' . $e->getMessage());
+    // Set empty result
+    $breedingStock = [];
 }
-
-$breedingStockQuery .= " ORDER BY a.type, a.name";
-
-$breedingStockStmt = $db->prepare($breedingStockQuery);
-$breedingStockStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
-
-if ($animal_type) {
-    $breedingStockStmt->bindParam(':type', $animal_type, PDO::PARAM_STR);
-}
-
-$breedingStockStmt->execute();
-$breedingStock = $breedingStockStmt->fetchAll();
-
-// Get count of offspring for each breeding animal
-foreach ($breedingStock as &$animal) {
-    $offspringCountStmt = $db->prepare("
-        SELECT COUNT(*) as count 
-        FROM animals 
-        WHERE (dam_id = :id OR sire_id = :id) AND user_id = :user_id
-    ");
-    $offspringCountStmt->bindParam(':id', $animal['id'], PDO::PARAM_INT);
-    $offspringCountStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
-    $offspringCountStmt->execute();
-    $animal['offspring_count'] = $offspringCountStmt->fetch()['count'];
-}
-unset($animal); // Break the reference
 
 // Get potential breeding stock (alive animals with no offspring)
-$potentialStockQuery = "
-    SELECT a.id, a.name, a.number, a.type, a.breed, a.gender, a.dob
-    FROM animals a
-    WHERE a.user_id = :user_id
-    AND a.status = 'Alive'
-    AND NOT EXISTS (
-        SELECT 1 FROM animals o 
-        WHERE (o.dam_id = a.id OR o.sire_id = a.id) AND o.user_id = :user_id
-    )
-";
+$potentialStock = [];
+try {
+    $potentialStockQuery = "
+        SELECT a.id, a.name, a.number, a.type, a.breed, a.gender, a.dob
+        FROM animals a
+        WHERE a.user_id = :user_id
+        AND a.status = 'Alive'
+        AND NOT EXISTS (
+            SELECT 1 FROM animals o 
+            WHERE (o.dam_id = a.id OR o.sire_id = a.id) AND o.user_id = :user_id2
+        )
+    ";
 
-if ($animal_type) {
-    $potentialStockQuery .= " AND a.type = :type";
+    if ($animal_type) {
+        $potentialStockQuery .= " AND a.type = :type";
+    }
+
+    $potentialStockQuery .= " ORDER BY a.type, a.gender, a.name";
+
+    $potentialStockStmt = $db->prepare($potentialStockQuery);
+    $potentialStockStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
+    $potentialStockStmt->bindParam(':user_id2', $current_user, PDO::PARAM_STR);
+
+    if ($animal_type) {
+        $potentialStockStmt->bindParam(':type', $animal_type, PDO::PARAM_STR);
+    }
+
+    $potentialStockStmt->execute();
+    $potentialStock = $potentialStockStmt->fetchAll();
+} catch (Exception $e) {
+    // Log error
+    error_log('Lineage Report Error (Potential Stock): ' . $e->getMessage());
+    // Set empty result
+    $potentialStock = [];
 }
-
-$potentialStockQuery .= " ORDER BY a.type, a.gender, a.name";
-
-$potentialStockStmt = $db->prepare($potentialStockQuery);
-$potentialStockStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
-
-if ($animal_type) {
-    $potentialStockStmt->bindParam(':type', $animal_type, PDO::PARAM_STR);
-}
-
-$potentialStockStmt->execute();
-$potentialStock = $potentialStockStmt->fetchAll();
 
 // Include header
 include_once 'includes/header.php';
@@ -849,7 +892,11 @@ include_once 'includes/header.php';
  * @return string CSS class name for the badge
  */
 function getStatusBadgeClass($status) {
-    switch ($status) {
+    if (!$status) {
+        return 'primary';
+    }
+    
+    switch (trim($status)) {
         case 'Alive':
             return 'success';
         case 'Dead':
