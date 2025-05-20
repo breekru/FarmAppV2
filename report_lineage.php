@@ -318,69 +318,73 @@ include_once 'includes/header.php';
             </div>
             <div class="card-body">
                 <form action="report_lineage.php" method="get" class="row g-3">
-                    <div class="col-md-4">
+                    <div class="col-md-5">
                         <label for="type" class="form-label">Animal Type</label>
-                        <select id="type" name="type" class="form-select" onchange="this.form.submit()">
+                        <select id="type" name="type" class="form-select">
                             <option value="">All Types</option>
                             <?php 
-                            // Get distinct types for dropdown 
-                            try {
-                                $typeQueryStmt = $db->prepare("
-                                    SELECT DISTINCT type FROM animals 
-                                    WHERE user_id = :user_id 
-                                    ORDER BY type
-                                ");
-                                $typeQueryStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
-                                $typeQueryStmt->execute();
-                                $availableTypes = $typeQueryStmt->fetchAll(PDO::FETCH_ASSOC);
-                                
-                                foreach ($availableTypes as $type): 
-                                    if (isset($type['type'])):
+                            // Hard-coded animal types from the database structure
+                            $typeOptions = array('Sheep', 'Chicken', 'Turkey', 'Pig', 'Cow');
+                            foreach ($typeOptions as $typeOption): 
                             ?>
-                            <option value="<?= htmlspecialchars($type['type']) ?>" <?= $animal_type === $type['type'] ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($type['type']) ?>
+                            <option value="<?= htmlspecialchars($typeOption) ?>" <?= $animal_type === $typeOption ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($typeOption) ?>
                             </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-5">
+                        <label for="id" class="form-label">Select Animal</label>
+                        <select id="id" name="id" class="form-select">
+                            <option value="">Choose an animal...</option>
                             <?php 
-                                    endif;
-                                endforeach; 
+                            // Get animals for dropdown 
+                            try {
+                                $animalQuery = "
+                                    SELECT id, name, number
+                                    FROM animals 
+                                    WHERE user_id = :user_id";
+                                
+                                // Add type filter if selected
+                                if (!empty($animal_type)) {
+                                    $animalQuery .= " AND type = :type";
+                                }
+                                
+                                $animalQuery .= " ORDER BY name";
+                                
+                                $animalStmt = $db->prepare($animalQuery);
+                                $animalStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
+                                
+                                if (!empty($animal_type)) {
+                                    $animalStmt->bindParam(':type', $animal_type, PDO::PARAM_STR);
+                                }
+                                
+                                $animalStmt->execute();
+                                
+                                // Display each animal
+                                while ($animalOption = $animalStmt->fetch(PDO::FETCH_ASSOC)) {
+                                    $selected = ($animal_id == $animalOption['id']) ? 'selected' : '';
+                                    echo '<option value="' . $animalOption['id'] . '" ' . $selected . '>' . 
+                                         htmlspecialchars($animalOption['name']) . ' (' . htmlspecialchars($animalOption['number']) . ')</option>';
+                                }
                             } catch (Exception $e) {
-                                error_log('Error loading animal types: ' . $e->getMessage());
+                                error_log('Error loading animals for dropdown: ' . $e->getMessage());
+                                echo '<option value="">Error loading animals</option>';
                             }
                             ?>
                         </select>
                     </div>
                     
-                    <div class="col-md-4">
-                        <label for="name" class="form-label">Animal Name</label>
-                        <select id="name" name="name" class="form-select">
-                            <option value="">All Names</option>
-                            <?php 
-                            // Debug info - remove in production
-                            // echo "<!-- Found " . count($availableNames) . " names -->";
-                            
-                            foreach ($availableNames as $nameOption): 
-                                // Make sure we're accessing the name property correctly
-                                if (isset($nameOption['name'])):
-                            ?>
-                            <option value="<?= htmlspecialchars($nameOption['name']) ?>" <?= $name_filter === $nameOption['name'] ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($nameOption['name']) ?>
-                            </option>
-                            <?php 
-                                endif;
-                            endforeach; 
-                            ?>
-                        </select>
-                    </div>
-                    
-                    <div class="col-md-4 d-flex align-items-end">
+                    <div class="col-md-2 d-flex align-items-end">
                         <button type="submit" class="btn btn-primary w-100">
-                            <i class="bi bi-filter"></i> Apply Filters
+                            <i class="bi bi-filter"></i> Go
                         </button>
                     </div>
                     
                     <div class="col-md-12 text-end">
                         <a href="report_lineage.php" class="btn btn-outline-secondary">
-                            <i class="bi bi-x-circle"></i> Clear Filters
+                            <i class="bi bi-x-circle"></i> Clear
                         </a>
                     </div>
                 </form>
