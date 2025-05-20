@@ -320,25 +320,33 @@ include_once 'includes/header.php';
                 <form action="report_lineage.php" method="get" class="row g-3">
                     <div class="col-md-4">
                         <label for="type" class="form-label">Animal Type</label>
-                        <select id="type" name="type" class="form-select">
+                        <select id="type" name="type" class="form-select" onchange="this.form.submit()">
                             <option value="">All Types</option>
                             <?php 
                             // Get distinct types for dropdown 
-                            $typeQueryStmt = $db->prepare("
-                                SELECT DISTINCT type FROM animals 
-                                WHERE user_id = :user_id 
-                                ORDER BY type
-                            ");
-                            $typeQueryStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
-                            $typeQueryStmt->execute();
-                            $availableTypes = $typeQueryStmt->fetchAll();
-                            
-                            foreach ($availableTypes as $type): 
+                            try {
+                                $typeQueryStmt = $db->prepare("
+                                    SELECT DISTINCT type FROM animals 
+                                    WHERE user_id = :user_id 
+                                    ORDER BY type
+                                ");
+                                $typeQueryStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
+                                $typeQueryStmt->execute();
+                                $availableTypes = $typeQueryStmt->fetchAll(PDO::FETCH_ASSOC);
+                                
+                                foreach ($availableTypes as $type): 
+                                    if (isset($type['type'])):
                             ?>
                             <option value="<?= htmlspecialchars($type['type']) ?>" <?= $animal_type === $type['type'] ? 'selected' : '' ?>>
                                 <?= htmlspecialchars($type['type']) ?>
                             </option>
-                            <?php endforeach; ?>
+                            <?php 
+                                    endif;
+                                endforeach; 
+                            } catch (Exception $e) {
+                                error_log('Error loading animal types: ' . $e->getMessage());
+                            }
+                            ?>
                         </select>
                     </div>
                     
@@ -346,11 +354,21 @@ include_once 'includes/header.php';
                         <label for="name" class="form-label">Animal Name</label>
                         <select id="name" name="name" class="form-select">
                             <option value="">All Names</option>
-                            <?php foreach ($availableNames as $nameOption): ?>
+                            <?php 
+                            // Debug info - remove in production
+                            // echo "<!-- Found " . count($availableNames) . " names -->";
+                            
+                            foreach ($availableNames as $nameOption): 
+                                // Make sure we're accessing the name property correctly
+                                if (isset($nameOption['name'])):
+                            ?>
                             <option value="<?= htmlspecialchars($nameOption['name']) ?>" <?= $name_filter === $nameOption['name'] ? 'selected' : '' ?>>
                                 <?= htmlspecialchars($nameOption['name']) ?>
                             </option>
-                            <?php endforeach; ?>
+                            <?php 
+                                endif;
+                            endforeach; 
+                            ?>
                         </select>
                     </div>
                     
