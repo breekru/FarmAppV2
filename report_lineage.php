@@ -114,8 +114,22 @@ function getParentInfo($db, $parent_id, $current_user) {
 
 // Get parent and grandparent information if we have an animal
 $parentInfo = [
-    'dam' => null,
-    'sire' => null,
+    'dam' => [
+        'id' => null,
+        'name' => 'Unknown',
+        'number' => '---',
+        'breed' => 'Unknown',
+        'gender' => 'Unknown',
+        'status' => 'Unknown'
+    ],
+    'sire' => [
+        'id' => null,
+        'name' => 'Unknown',
+        'number' => '---',
+        'breed' => 'Unknown',
+        'gender' => 'Unknown',
+        'status' => 'Unknown'
+    ],
     'dam_dam' => null,
     'dam_sire' => null,
     'sire_dam' => null,
@@ -123,43 +137,102 @@ $parentInfo = [
 ];
 
 if ($animal) {
-    // Get dam (mother) information
-    $parentInfo['dam'] = getParentInfo($db, $animal['dam_id'], $current_user);
-    
-    // Get sire (father) information
-    $parentInfo['sire'] = getParentInfo($db, $animal['sire_id'], $current_user);
-    
-    // Get grandparent information if available
-    if ($parentInfo['dam']['id']) {
-        $damStmt = $db->prepare("
-            SELECT dam_id, sire_id 
-            FROM animals 
-            WHERE id = :id AND user_id = :user_id
-        ");
-        $damStmt->bindParam(':id', $animal['dam_id'], PDO::PARAM_INT);
-        $damStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
-        $damStmt->execute();
-        
-        if ($damInfo = $damStmt->fetch(PDO::FETCH_ASSOC)) {
-            $parentInfo['dam_dam'] = getParentInfo($db, $damInfo['dam_id'], $current_user);
-            $parentInfo['dam_sire'] = getParentInfo($db, $damInfo['sire_id'], $current_user);
+    try {
+        // Get dam (mother) information if dam_id exists
+        if (!empty($animal['dam_id'])) {
+            $damStmt = $db->prepare("
+                SELECT id, name, number, breed, gender, status, dam_id, sire_id 
+                FROM animals 
+                WHERE id = :id AND user_id = :user_id
+            ");
+            $damStmt->bindParam(':id', $animal['dam_id'], PDO::PARAM_INT);
+            $damStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
+            $damStmt->execute();
+            
+            if ($damStmt->rowCount() > 0) {
+                $parentInfo['dam'] = $damStmt->fetch(PDO::FETCH_ASSOC);
+                
+                // Get maternal grandparents if available
+                if (!empty($parentInfo['dam']['dam_id'])) {
+                    $damDamStmt = $db->prepare("
+                        SELECT id, name, number, breed, gender, status 
+                        FROM animals 
+                        WHERE id = :id AND user_id = :user_id
+                    ");
+                    $damDamStmt->bindParam(':id', $parentInfo['dam']['dam_id'], PDO::PARAM_INT);
+                    $damDamStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
+                    $damDamStmt->execute();
+                    
+                    if ($damDamStmt->rowCount() > 0) {
+                        $parentInfo['dam_dam'] = $damDamStmt->fetch(PDO::FETCH_ASSOC);
+                    }
+                }
+                
+                if (!empty($parentInfo['dam']['sire_id'])) {
+                    $damSireStmt = $db->prepare("
+                        SELECT id, name, number, breed, gender, status 
+                        FROM animals 
+                        WHERE id = :id AND user_id = :user_id
+                    ");
+                    $damSireStmt->bindParam(':id', $parentInfo['dam']['sire_id'], PDO::PARAM_INT);
+                    $damSireStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
+                    $damSireStmt->execute();
+                    
+                    if ($damSireStmt->rowCount() > 0) {
+                        $parentInfo['dam_sire'] = $damSireStmt->fetch(PDO::FETCH_ASSOC);
+                    }
+                }
+            }
         }
-    }
-    
-    if ($parentInfo['sire']['id']) {
-        $sireStmt = $db->prepare("
-            SELECT dam_id, sire_id 
-            FROM animals 
-            WHERE id = :id AND user_id = :user_id
-        ");
-        $sireStmt->bindParam(':id', $animal['sire_id'], PDO::PARAM_INT);
-        $sireStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
-        $sireStmt->execute();
         
-        if ($sireInfo = $sireStmt->fetch(PDO::FETCH_ASSOC)) {
-            $parentInfo['sire_dam'] = getParentInfo($db, $sireInfo['dam_id'], $current_user);
-            $parentInfo['sire_sire'] = getParentInfo($db, $sireInfo['sire_id'], $current_user);
+        // Get sire (father) information if sire_id exists
+        if (!empty($animal['sire_id'])) {
+            $sireStmt = $db->prepare("
+                SELECT id, name, number, breed, gender, status, dam_id, sire_id 
+                FROM animals 
+                WHERE id = :id AND user_id = :user_id
+            ");
+            $sireStmt->bindParam(':id', $animal['sire_id'], PDO::PARAM_INT);
+            $sireStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
+            $sireStmt->execute();
+            
+            if ($sireStmt->rowCount() > 0) {
+                $parentInfo['sire'] = $sireStmt->fetch(PDO::FETCH_ASSOC);
+                
+                // Get paternal grandparents if available
+                if (!empty($parentInfo['sire']['dam_id'])) {
+                    $sireDamStmt = $db->prepare("
+                        SELECT id, name, number, breed, gender, status 
+                        FROM animals 
+                        WHERE id = :id AND user_id = :user_id
+                    ");
+                    $sireDamStmt->bindParam(':id', $parentInfo['sire']['dam_id'], PDO::PARAM_INT);
+                    $sireDamStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
+                    $sireDamStmt->execute();
+                    
+                    if ($sireDamStmt->rowCount() > 0) {
+                        $parentInfo['sire_dam'] = $sireDamStmt->fetch(PDO::FETCH_ASSOC);
+                    }
+                }
+                
+                if (!empty($parentInfo['sire']['sire_id'])) {
+                    $sireSireStmt = $db->prepare("
+                        SELECT id, name, number, breed, gender, status 
+                        FROM animals 
+                        WHERE id = :id AND user_id = :user_id
+                    ");
+                    $sireSireStmt->bindParam(':id', $parentInfo['sire']['sire_id'], PDO::PARAM_INT);
+                    $sireSireStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
+                    $sireSireStmt->execute();
+                    
+                    if ($sireSireStmt->rowCount() > 0) {
+                        $parentInfo['sire_sire'] = $sireSireStmt->fetch(PDO::FETCH_ASSOC);
+                    }
+                }
+            }
         }
+    } catch (Exception $e) {
+        error_log("Error getting parent info: " . $e->getMessage());
     }
 }
 
