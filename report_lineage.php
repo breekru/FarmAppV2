@@ -426,7 +426,12 @@ include_once 'includes/header.php';
         </div>
     </div>
     <div class="card-body">
-        <?php if ($view_mode === 'tree'): ?>
+        <?php if (!$animal): ?>
+            <div class="alert alert-info">
+                <h4 class="alert-heading"><i class="bi bi-info-circle me-2"></i>Select an Animal</h4>
+                <p>Please select an animal from the dropdown above to view its lineage information.</p>
+            </div>
+        <?php elseif ($view_mode === 'tree'): ?>
         <!-- Tree View -->
         <div class="ancestry-tree">
             <div class="row">
