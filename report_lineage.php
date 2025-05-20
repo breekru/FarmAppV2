@@ -210,12 +210,7 @@ try {
     
     // Add name filter if provided
     if (!empty($name_filter)) {
-        $breedingStockQuery .= " AND a.name LIKE :name_filter";
-    }
-    
-    // Add number filter if provided
-    if (!empty($number_filter)) {
-        $breedingStockQuery .= " AND a.number LIKE :number_filter";
+        $breedingStockQuery .= " AND a.name = :name_filter";
     }
 
     $breedingStockQuery .= " ORDER BY a.type, a.name";
@@ -229,16 +224,9 @@ try {
         $breedingStockStmt->bindParam(':type', $animal_type, PDO::PARAM_STR);
     }
     
-    // Bind name filter parameter
+    // Bind name filter parameter - exact match now that we use dropdown
     if (!empty($name_filter)) {
-        $nameFilterParam = "%$name_filter%";
-        $breedingStockStmt->bindParam(':name_filter', $nameFilterParam, PDO::PARAM_STR);
-    }
-    
-    // Bind number filter parameter
-    if (!empty($number_filter)) {
-        $numberFilterParam = "%$number_filter%";
-        $breedingStockStmt->bindParam(':number_filter', $numberFilterParam, PDO::PARAM_STR);
+        $breedingStockStmt->bindParam(':name_filter', $name_filter, PDO::PARAM_STR);
     }
 
     $breedingStockStmt->execute();
@@ -290,12 +278,7 @@ try {
     
     // Add name filter if provided
     if (!empty($name_filter)) {
-        $potentialStockQuery .= " AND a.name LIKE :name_filter";
-    }
-    
-    // Add number filter if provided
-    if (!empty($number_filter)) {
-        $potentialStockQuery .= " AND a.number LIKE :number_filter";
+        $potentialStockQuery .= " AND a.name = :name_filter";
     }
 
     $potentialStockQuery .= " ORDER BY a.type, a.gender, a.name";
@@ -308,16 +291,9 @@ try {
         $potentialStockStmt->bindParam(':type', $animal_type, PDO::PARAM_STR);
     }
     
-    // Bind name filter parameter
+    // Bind name filter parameter - exact match now that we use dropdown
     if (!empty($name_filter)) {
-        $nameFilterParam = "%$name_filter%";
-        $potentialStockStmt->bindParam(':name_filter', $nameFilterParam, PDO::PARAM_STR);
-    }
-    
-    // Bind number filter parameter
-    if (!empty($number_filter)) {
-        $numberFilterParam = "%$number_filter%";
-        $potentialStockStmt->bindParam(':number_filter', $numberFilterParam, PDO::PARAM_STR);
+        $potentialStockStmt->bindParam(':name_filter', $name_filter, PDO::PARAM_STR);
     }
 
     $potentialStockStmt->execute();
@@ -335,18 +311,30 @@ include_once 'includes/header.php';
 
 <!-- Filter and Actions -->
 <div class="row mb-4">
-    <div class="col-md-9">
+    <div class="col-md-8">
         <div class="card shadow-sm">
             <div class="card-header">
                 <h5 class="mb-0">Filter Lineage Report</h5>
             </div>
             <div class="card-body">
                 <form action="report_lineage.php" method="get" class="row g-3">
-                    <div class="col-md-3">
+                    <div class="col-md-4">
                         <label for="type" class="form-label">Animal Type</label>
                         <select id="type" name="type" class="form-select">
                             <option value="">All Types</option>
-                            <?php foreach ($availableTypes as $type): ?>
+                            <?php 
+                            // Get distinct types for dropdown 
+                            $typeQueryStmt = $db->prepare("
+                                SELECT DISTINCT type FROM animals 
+                                WHERE user_id = :user_id 
+                                ORDER BY type
+                            ");
+                            $typeQueryStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
+                            $typeQueryStmt->execute();
+                            $availableTypes = $typeQueryStmt->fetchAll();
+                            
+                            foreach ($availableTypes as $type): 
+                            ?>
                             <option value="<?= htmlspecialchars($type['type']) ?>" <?= $animal_type === $type['type'] ? 'selected' : '' ?>>
                                 <?= htmlspecialchars($type['type']) ?>
                             </option>
@@ -354,21 +342,19 @@ include_once 'includes/header.php';
                         </select>
                     </div>
                     
-                    <div class="col-md-3">
-                        <label for="name" class="form-label">Name</label>
-                        <input type="text" id="name" name="name" class="form-control" 
-                               value="<?= htmlspecialchars($name_filter) ?>" 
-                               placeholder="Filter by name">
+                    <div class="col-md-4">
+                        <label for="name" class="form-label">Animal Name</label>
+                        <select id="name" name="name" class="form-select">
+                            <option value="">All Names</option>
+                            <?php foreach ($availableNames as $nameOption): ?>
+                            <option value="<?= htmlspecialchars($nameOption['name']) ?>" <?= $name_filter === $nameOption['name'] ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($nameOption['name']) ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
                     
-                    <div class="col-md-3">
-                        <label for="number" class="form-label">Number</label>
-                        <input type="text" id="number" name="number" class="form-control" 
-                               value="<?= htmlspecialchars($number_filter) ?>" 
-                               placeholder="Filter by number">
-                    </div>
-                    
-                    <div class="col-md-3 d-flex align-items-end">
+                    <div class="col-md-4 d-flex align-items-end">
                         <button type="submit" class="btn btn-primary w-100">
                             <i class="bi bi-filter"></i> Apply Filters
                         </button>
@@ -384,7 +370,7 @@ include_once 'includes/header.php';
         </div>
     </div>
     
-    <div class="col-md-3">
+    <div class="col-md-4">
         <div class="card shadow-sm h-100">
             <div class="card-header">
                 <h5 class="mb-0">Actions</h5>
@@ -431,6 +417,7 @@ include_once 'includes/header.php';
                         <div class="card-body">
                             <p class="mb-1"><strong>Breed:</strong> <?= htmlspecialchars($animal['breed']) ?></p>
                             <p class="mb-1"><strong>Gender:</strong> <?= htmlspecialchars($animal['gender']) ?></p>
+                            <p class="mb-1"><strong>Type:</strong> <?= htmlspecialchars($animal['type']) ?></p>
                             <p class="mb-0">
                                 <span class="badge rounded-pill bg-<?= getStatusBadgeClass($animal['status']) ?>">
                                     <?= htmlspecialchars($animal['status']) ?>
