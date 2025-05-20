@@ -22,10 +22,14 @@ $current_user = $_SESSION["username"];
 // Get database connection
 $db = getDbConnection();
 
-// Process filters
-$type = isset($_GET['type']) && !empty($_GET['type']) ? $_GET['type'] : '';
-$status = isset($_GET['status']) ? $_GET['status'] : '';
-$gender = isset($_GET['gender']) ? $_GET['gender'] : '';
+// Process filters - Ensure type is properly sanitized and handled
+$type = '';
+if (isset($_GET['type'])) {
+    $type = trim($_GET['type']);
+}
+
+$status = isset($_GET['status']) ? trim($_GET['status']) : '';
+$gender = isset($_GET['gender']) ? trim($_GET['gender']) : '';
 
 // Set page variables
 $page_title = "Inventory Report";
@@ -45,6 +49,8 @@ $params = [':user_id' => $current_user];
 if (!empty($type)) {
     $baseQuery .= " AND type = :type";
     $params[':type'] = $type;
+    // Add debug comment - remove after fixing
+    // echo "<!-- Adding type filter: " . htmlspecialchars($type) . " -->";
 }
 
 if (!empty($status)) {
@@ -140,14 +146,17 @@ include_once 'includes/header.php';
                 <h5 class="mb-0">Filter Inventory</h5>
             </div>
             <div class="card-body">
-                <form action="" method="get" class="row g-3">
+                <form action="<?= htmlspecialchars($_SERVER['PHP_SELF']) ?>" method="get" class="row g-3" id="filterForm">
                     <div class="col-md-4">
                         <label for="type" class="form-label">Animal Type</label>
                         <select id="type" name="type" class="form-select">
                             <option value="">All Types</option>
-                            <?php foreach ($availableTypes as $availableType): ?>
-                            <option value="<?= htmlspecialchars($availableType['type']) ?>" <?= $type === $availableType['type'] ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($availableType['type']) ?>
+                            <?php foreach ($availableTypes as $availableType): 
+                                $typeValue = $availableType['type'];
+                                $isSelected = ($type === $typeValue);
+                            ?>
+                            <option value="<?= htmlspecialchars($typeValue) ?>" <?= $isSelected ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($typeValue) ?>
                             </option>
                             <?php endforeach; ?>
                         </select>
@@ -157,11 +166,11 @@ include_once 'includes/header.php';
                         <label for="status" class="form-label">Status</label>
                         <select id="status" name="status" class="form-select">
                             <option value="">All Statuses</option>
-                            <option value="Alive" <?= $status === 'Alive' ? 'selected' : '' ?>>Alive</option>
-                            <option value="Dead" <?= $status === 'Dead' ? 'selected' : '' ?>>Dead</option>
-                            <option value="Sold" <?= $status === 'Sold' ? 'selected' : '' ?>>Sold</option>
-                            <option value="For Sale" <?= $status === 'For Sale' ? 'selected' : '' ?>>For Sale</option>
-                            <option value="Harvested" <?= $status === 'Harvested' ? 'selected' : '' ?>>Harvested</option>
+                            <option value="Alive" <?= ($status === 'Alive') ? 'selected' : '' ?>>Alive</option>
+                            <option value="Dead" <?= ($status === 'Dead') ? 'selected' : '' ?>>Dead</option>
+                            <option value="Sold" <?= ($status === 'Sold') ? 'selected' : '' ?>>Sold</option>
+                            <option value="For Sale" <?= ($status === 'For Sale') ? 'selected' : '' ?>>For Sale</option>
+                            <option value="Harvested" <?= ($status === 'Harvested') ? 'selected' : '' ?>>Harvested</option>
                         </select>
                     </div>
                     
@@ -169,13 +178,13 @@ include_once 'includes/header.php';
                         <label for="gender" class="form-label">Gender</label>
                         <select id="gender" name="gender" class="form-select">
                             <option value="">All Genders</option>
-                            <option value="Male" <?= $gender === 'Male' ? 'selected' : '' ?>>Male</option>
-                            <option value="Female" <?= $gender === 'Female' ? 'selected' : '' ?>>Female</option>
+                            <option value="Male" <?= ($gender === 'Male') ? 'selected' : '' ?>>Male</option>
+                            <option value="Female" <?= ($gender === 'Female') ? 'selected' : '' ?>>Female</option>
                         </select>
                     </div>
                     
                     <div class="col-12">
-                        <button type="submit" class="btn btn-primary">
+                        <button type="submit" class="btn btn-primary" id="applyFilters">
                             <i class="bi bi-filter"></i> Apply Filters
                         </button>
                         <a href="report_inventory.php" class="btn btn-secondary">
@@ -189,6 +198,22 @@ include_once 'includes/header.php';
                         </button>
                     </div>
                 </form>
+                
+                <script>
+                // Add this to help debug the form submission
+                document.getElementById('filterForm').addEventListener('submit', function(e) {
+                    // Log form values before submit
+                    const typeValue = document.getElementById('type').value;
+                    const statusValue = document.getElementById('status').value;
+                    const genderValue = document.getElementById('gender').value;
+                    
+                    console.log('Submitting with values:', {
+                        type: typeValue,
+                        status: statusValue,
+                        gender: genderValue
+                    });
+                });
+                </script>
             </div>
         </div>
     </div>
@@ -349,6 +374,13 @@ include_once 'includes/header.php';
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // For debugging filter values
+    console.log('Current filters:', {
+        type: '<?= htmlspecialchars($type) ?>',
+        status: '<?= htmlspecialchars($status) ?>',
+        gender: '<?= htmlspecialchars($gender) ?>'
+    });
+    
     // Define breedData object
     const breedData = {
         <?php 
