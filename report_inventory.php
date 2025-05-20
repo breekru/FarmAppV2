@@ -22,10 +22,16 @@ $current_user = $_SESSION["username"];
 // Get database connection
 $db = getDbConnection();
 
-// Process filters - Ensure type is properly sanitized and handled
+// IMPORTANT DEBUG OUTPUT - Uncomment to debug
+// echo "<!-- Raw GET parameters: " . htmlspecialchars(print_r($_GET, true)) . " -->";
+
+// Process filters - Ensure proper handling of URL parameters
+// CRITICAL FIX: Directly get 'type' from URL parameter
 $type = '';
 if (isset($_GET['type'])) {
     $type = trim($_GET['type']);
+    // Force debugging output
+    // echo "<!-- DEBUG: type from GET = '" . htmlspecialchars($type) . "' -->";
 }
 
 $status = isset($_GET['status']) ? trim($_GET['status']) : '';
@@ -46,11 +52,14 @@ $baseQuery = "
 // Add filters
 $params = [':user_id' => $current_user];
 
+// Force debug output of the type parameter
+// echo "<!-- DEBUG before query: type = '" . htmlspecialchars($type) . "' -->";
+
 if (!empty($type)) {
     $baseQuery .= " AND type = :type";
     $params[':type'] = $type;
-    // Add debug comment - remove after fixing
-    // echo "<!-- Adding type filter: " . htmlspecialchars($type) . " -->";
+    // Debug output
+    // echo "<!-- DEBUG in query: Adding type filter with value = '" . htmlspecialchars($type) . "' -->";
 }
 
 if (!empty($status)) {
@@ -149,13 +158,20 @@ include_once 'includes/header.php';
                 <form action="<?= htmlspecialchars($_SERVER['PHP_SELF']) ?>" method="get" class="row g-3" id="filterForm">
                     <div class="col-md-4">
                         <label for="type" class="form-label">Animal Type</label>
+                        <!-- Force debugger output -->
+                        <!-- Current type value: <?= htmlspecialchars($type) ?> -->
                         <select id="type" name="type" class="form-select">
                             <option value="">All Types</option>
-                            <?php foreach ($availableTypes as $availableType): 
+                            <?php 
+                            // Debug each option
+                            foreach ($availableTypes as $availableType): 
                                 $typeValue = $availableType['type'];
-                                $isSelected = ($type === $typeValue);
+                                // Force strict comparison
+                                $isSelected = (strcasecmp($type, $typeValue) === 0);
+                                // Debug each comparison
+                                // echo "<!-- Comparing '" . htmlspecialchars($type) . "' with '" . htmlspecialchars($typeValue) . "' = " . ($isSelected ? "MATCH" : "NO MATCH") . " -->";
                             ?>
-                            <option value="<?= htmlspecialchars($typeValue) ?>" <?= $isSelected ? 'selected' : '' ?>>
+                            <option value="<?= htmlspecialchars($typeValue) ?>" <?= $isSelected ? 'selected="selected"' : '' ?>>
                                 <?= htmlspecialchars($typeValue) ?>
                             </option>
                             <?php endforeach; ?>
@@ -200,7 +216,39 @@ include_once 'includes/header.php';
                 </form>
                 
                 <script>
-                // Add this to help debug the form submission
+                // Add this to help debug the form submission and current values
+                document.addEventListener('DOMContentLoaded', function() {
+                    // Check URL parameters
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const urlType = urlParams.get('type');
+                    
+                    console.log('URL parameters:', {
+                        type: urlType,
+                        status: urlParams.get('status'),
+                        gender: urlParams.get('gender')
+                    });
+                    
+                    // Check what's selected in the dropdown
+                    const typeDropdown = document.getElementById('type');
+                    console.log('Dropdown selected value:', typeDropdown.value);
+                    
+                    // Check PHP variable passed to JavaScript
+                    console.log('PHP type variable:', '<?= addslashes($type) ?>');
+                    
+                    // Force correct selection if needed
+                    if (urlType && typeDropdown.value !== urlType) {
+                        console.log('Fixing selection mismatch!');
+                        // Find and select the correct option
+                        for (let i = 0; i < typeDropdown.options.length; i++) {
+                            if (typeDropdown.options[i].value === urlType) {
+                                typeDropdown.selectedIndex = i;
+                                console.log('Fixed selection to match URL parameter');
+                                break;
+                            }
+                        }
+                    }
+                });
+                
                 document.getElementById('filterForm').addEventListener('submit', function(e) {
                     // Log form values before submit
                     const typeValue = document.getElementById('type').value;
