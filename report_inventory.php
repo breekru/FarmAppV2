@@ -47,7 +47,7 @@ $page_title = "Inventory Report";
 $page_header = "Livestock Inventory Report";
 $page_subheader = "Track and manage your farm animal inventory";
 
-// Debug: Capture the type value before preparing the query
+// Store the current type value
 $type_before_query = $type;
 
 // Prepare base query
@@ -63,8 +63,6 @@ $params = [':user_id' => $current_user];
 if (!empty($type)) {
     $baseQuery .= " AND type = :type";
     $params[':type'] = $type;
-    // Debug output
-    // echo "<!-- DEBUG in query: Adding type filter with value = '" . htmlspecialchars($type) . "' -->";
 }
 
 if (!empty($status)) {
@@ -151,18 +149,9 @@ while ($row = $breedStmt->fetch()) {
 // Include header
 include_once 'includes/header.php';
 
-// Debug: Capture the type value after including header.php
-$type_after_header = $type;
-
 // Check if type has changed after including header.php
+$type_after_header = $type;
 if ($type_before_query !== $type_after_header) {
-    // Uncomment for debugging
-    /*
-    echo "<!-- WARNING: \$type variable changed after including header.php! -->";
-    echo "<!-- Before: '" . htmlspecialchars($type_before_query) . "' -->";
-    echo "<!-- After: '" . htmlspecialchars($type_after_header) . "' -->";
-    */
-    
     // Force restoration of the original type from URL
     $type = $originalType;
 }
@@ -444,27 +433,9 @@ if ($type_before_query !== $type_after_header) {
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // IMPORTANT: Add direct URL parameter access to bypass PHP variables entirely
+    // Get the type parameter directly from URL
     const urlParams = new URLSearchParams(window.location.search);
     const urlType = urlParams.get('type');
-    
-    console.log('Current filters from URL:', {
-        type: urlType,
-        status: urlParams.get('status'),
-        gender: urlParams.get('gender')
-    });
-    
-    console.log('Current filters from PHP variables:', {
-        type: '<?= htmlspecialchars($type) ?>',
-        status: '<?= htmlspecialchars($status) ?>',
-        gender: '<?= htmlspecialchars($gender) ?>'
-    });
-    
-    // Check if type was changed between URL and PHP variables
-    if (urlType && urlType !== '<?= htmlspecialchars($type) ?>') {
-        console.warn('Type mismatch detected! URL has type:', urlType, 
-                     'but PHP variable has type:', '<?= htmlspecialchars($type) ?>');
-    }
     
     // Define breedData object
     const breedData = {
@@ -520,7 +491,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // CRITICAL FIX: Breed Chart using URL parameter as the primary source of truth
+    // Breed Chart - use URL parameter first, then PHP variable, then most common type
     const breedCtx = document.getElementById('breedChart');
     
     // Find most common type (as fallback)
@@ -534,13 +505,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     <?php endforeach; ?>
     
-    // CRITICAL: Use URL parameter as the primary source of truth, then fall back to PHP variable, then to most common type
+    // Use URL parameter as the primary source of truth, then fall back to PHP variable, then to most common type
     let chartType = urlType || '<?= htmlspecialchars($type) ?>' || mostCommonType;
-    
-    console.log('Breed chart using type:', chartType, 
-                '(URL:', urlType, 
-                ', PHP:', '<?= htmlspecialchars($type) ?>', 
-                ', Most common:', mostCommonType, ')');
     
     // Default datasets
     let breedLabels = [];
@@ -552,7 +518,6 @@ document.addEventListener('DOMContentLoaded', function() {
         breedValues = breedData[chartType].data;
     } else if (breedData[mostCommonType]) {
         // Fallback to most common type if selected type has no breed data
-        console.log('No breed data for', chartType, ', falling back to most common type:', mostCommonType);
         breedLabels = breedData[mostCommonType].labels;
         breedValues = breedData[mostCommonType].data;
         chartType = mostCommonType; // Update chart type for display
@@ -593,7 +558,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Type filter change should update breed chart
     document.getElementById('type').addEventListener('change', function() {
         const newType = this.value;
-        console.log('Type dropdown changed to:', newType);
         
         // Use selected type, or fallback to most common type if empty
         const typeToUse = newType || mostCommonType;
@@ -603,19 +567,15 @@ document.addEventListener('DOMContentLoaded', function() {
             breedChart.data.datasets[0].data = breedData[typeToUse].data;
             breedChart.options.plugins.title.text = 'Breeds for ' + typeToUse;
             breedChart.update();
-            console.log('Updated chart to show breed data for:', typeToUse);
-        } else {
-            console.log('No breed data available for type:', typeToUse);
         }
     });
     
-    // Make sure dropdown reflects URL parameter (some browsers might not respect the selected attribute)
+    // Make sure dropdown reflects URL parameter
     if (urlType) {
         const typeDropdown = document.getElementById('type');
         for (let i = 0; i < typeDropdown.options.length; i++) {
             if (typeDropdown.options[i].value === urlType) {
                 typeDropdown.selectedIndex = i;
-                console.log('Force-set dropdown to match URL parameter:', urlType);
                 break;
             }
         }
