@@ -23,7 +23,6 @@ $current_user = $_SESSION["username"];
 $db = getDbConnection();
 
 // Process filters
-//$type = isset($_GET['type']) ? $_GET['type'] : '';
 $type = isset($_GET['type']) && !empty($_GET['type']) ? $_GET['type'] : '';
 $status = isset($_GET['status']) ? $_GET['status'] : '';
 $gender = isset($_GET['gender']) ? $_GET['gender'] : '';
@@ -142,8 +141,7 @@ include_once 'includes/header.php';
             </div>
             <div class="card-body">
                 <form action="" method="get" class="row g-3">
-
-                <div class="col-md-4">
+                    <div class="col-md-4">
                         <label for="type" class="form-label">Animal Type</label>
                         <select id="type" name="type" class="form-select">
                             <option value="">All Types</option>
@@ -348,30 +346,20 @@ include_once 'includes/header.php';
     </div>
 </div>
 
-const breedData = {
-<?php 
-    foreach ($breedData as $type => $data) {
-        echo "'" . $type . "': {";
-        echo "labels: ['" . implode("', '", $data['labels']) . "'],";
-        echo "data: [" . implode(", ", $data['data']) . "]";
-        echo "},\n";
-    }
-?>
-};
-
-
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Define breedData object first
-    const breedData = {};
-    
-    <?php foreach ($breedData as $type => $data): ?>
-    breedData['<?= $type ?>'] = {
-        labels: [<?= "'" . implode("', '", $data['labels']) . "'" ?>],
-        data: [<?= implode(", ", $data['data']) ?>]
+    // Define breedData object
+    const breedData = {
+        <?php 
+        foreach ($breedData as $type => $data) {
+            echo "'" . $type . "': {";
+            echo "labels: ['" . implode("', '", $data['labels']) . "'],";
+            echo "data: [" . implode(", ", $data['data']) . "]";
+            echo "},\n";
+        }
+        ?>
     };
-    <?php endforeach; ?>
     
     // Type Chart
     const typeCtx = document.getElementById('typeChart');
@@ -539,7 +527,6 @@ document.addEventListener('DOMContentLoaded', function() {
             document.body.appendChild(link);
             
             // Trigger download and clean up
-            console.log("Initiating download of CSV file: " + filename);
             link.click();
             
             // Clean up
@@ -547,8 +534,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.body.removeChild(link);
                 window.URL.revokeObjectURL(url);
             }, 100);
-            
-            console.log("CSV export completed");
         } catch (error) {
             console.error("Error exporting CSV:", error);
             alert("Error exporting CSV: " + error.message);
