@@ -483,10 +483,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Breed Chart - Default to most common type
+    // Breed Chart - Default to selected type or most common type if none selected
     const breedCtx = document.getElementById('breedChart');
     
-    // Find most common type
+    // Get selected type from URL parameter or fallback to most common type
+    let selectedType = '<?= !empty($type) ? $type : '' ?>';
     let mostCommonType = '<?= !empty($typeData) ? $typeData[0]['type'] : ''; ?>';
     let maxCount = <?= !empty($typeData) ? $typeData[0]['count'] : 0; ?>;
     
@@ -497,13 +498,27 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     <?php endforeach; ?>
     
-    // Default datasets - will be populated with the most common type's breeds
+    // If no type is selected, use most common type
+    if (!selectedType) {
+        selectedType = mostCommonType;
+    }
+    
+    console.log('Chart initialization - Selected type:', selectedType);
+    
+    // Default datasets - will be populated with the selected type's breeds
     let breedLabels = [];
     let breedValues = [];
     
-    if (breedData[mostCommonType]) {
+    // Use the selected type's breed data
+    if (breedData[selectedType]) {
+        breedLabels = breedData[selectedType].labels;
+        breedValues = breedData[selectedType].data;
+    } else if (breedData[mostCommonType]) {
+        // Fallback to most common type if selected type has no breed data
+        console.log('No breed data for selected type, falling back to most common type:', mostCommonType);
         breedLabels = breedData[mostCommonType].labels;
         breedValues = breedData[mostCommonType].data;
+        selectedType = mostCommonType; // Update selected type for chart title
     }
     
     const breedChart = new Chart(breedCtx, {
@@ -524,7 +539,7 @@ document.addEventListener('DOMContentLoaded', function() {
             plugins: {
                 title: {
                     display: true,
-                    text: 'Breeds for ' + mostCommonType
+                    text: 'Breeds for ' + selectedType
                 }
             },
             scales: {
@@ -540,13 +555,20 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Type filter change should update breed chart
     document.getElementById('type').addEventListener('change', function() {
-        const selectedType = this.value || mostCommonType;
+        const newType = this.value;
+        console.log('Type dropdown changed to:', newType);
         
-        if (breedData[selectedType]) {
-            breedChart.data.labels = breedData[selectedType].labels;
-            breedChart.data.datasets[0].data = breedData[selectedType].data;
-            breedChart.options.plugins.title.text = 'Breeds for ' + selectedType;
+        // Use selected type, or fallback to most common type if empty
+        const typeToUse = newType || mostCommonType;
+        
+        if (breedData[typeToUse]) {
+            breedChart.data.labels = breedData[typeToUse].labels;
+            breedChart.data.datasets[0].data = breedData[typeToUse].data;
+            breedChart.options.plugins.title.text = 'Breeds for ' + typeToUse;
             breedChart.update();
+            console.log('Updated chart to show breed data for:', typeToUse);
+        } else {
+            console.log('No breed data available for type:', typeToUse);
         }
     });
     
