@@ -34,6 +34,8 @@ $view_mode = isset($_GET['view']) ? $_GET['view'] : 'tree';
 
 // Get specific animal type filter if provided
 $animal_type = isset($_GET['type']) ? $_GET['type'] : null;
+$name_filter = isset($_GET['name']) ? trim($_GET['name']) : '';
+$number_filter = isset($_GET['number']) ? trim($_GET['number']) : '';
 
 // If an animal ID is provided, get the animal data
 $animal = null;
@@ -205,6 +207,16 @@ try {
     if ($animal_type) {
         $breedingStockQuery .= " AND a.type = :type";
     }
+    
+    // Add name filter if provided
+    if (!empty($name_filter)) {
+        $breedingStockQuery .= " AND a.name LIKE :name_filter";
+    }
+    
+    // Add number filter if provided
+    if (!empty($number_filter)) {
+        $breedingStockQuery .= " AND a.number LIKE :number_filter";
+    }
 
     $breedingStockQuery .= " ORDER BY a.type, a.name";
 
@@ -215,6 +227,18 @@ try {
 
     if ($animal_type) {
         $breedingStockStmt->bindParam(':type', $animal_type, PDO::PARAM_STR);
+    }
+    
+    // Bind name filter parameter
+    if (!empty($name_filter)) {
+        $nameFilterParam = "%$name_filter%";
+        $breedingStockStmt->bindParam(':name_filter', $nameFilterParam, PDO::PARAM_STR);
+    }
+    
+    // Bind number filter parameter
+    if (!empty($number_filter)) {
+        $numberFilterParam = "%$number_filter%";
+        $breedingStockStmt->bindParam(':number_filter', $numberFilterParam, PDO::PARAM_STR);
     }
 
     $breedingStockStmt->execute();
@@ -263,6 +287,16 @@ try {
     if ($animal_type) {
         $potentialStockQuery .= " AND a.type = :type";
     }
+    
+    // Add name filter if provided
+    if (!empty($name_filter)) {
+        $potentialStockQuery .= " AND a.name LIKE :name_filter";
+    }
+    
+    // Add number filter if provided
+    if (!empty($number_filter)) {
+        $potentialStockQuery .= " AND a.number LIKE :number_filter";
+    }
 
     $potentialStockQuery .= " ORDER BY a.type, a.gender, a.name";
 
@@ -272,6 +306,18 @@ try {
 
     if ($animal_type) {
         $potentialStockStmt->bindParam(':type', $animal_type, PDO::PARAM_STR);
+    }
+    
+    // Bind name filter parameter
+    if (!empty($name_filter)) {
+        $nameFilterParam = "%$name_filter%";
+        $potentialStockStmt->bindParam(':name_filter', $nameFilterParam, PDO::PARAM_STR);
+    }
+    
+    // Bind number filter parameter
+    if (!empty($number_filter)) {
+        $numberFilterParam = "%$number_filter%";
+        $potentialStockStmt->bindParam(':number_filter', $numberFilterParam, PDO::PARAM_STR);
     }
 
     $potentialStockStmt->execute();
@@ -289,14 +335,14 @@ include_once 'includes/header.php';
 
 <!-- Filter and Actions -->
 <div class="row mb-4">
-    <div class="col-md-8">
+    <div class="col-md-9">
         <div class="card shadow-sm">
             <div class="card-header">
                 <h5 class="mb-0">Filter Lineage Report</h5>
             </div>
             <div class="card-body">
                 <form action="report_lineage.php" method="get" class="row g-3">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label for="type" class="form-label">Animal Type</label>
                         <select id="type" name="type" class="form-select">
                             <option value="">All Types</option>
@@ -308,15 +354,29 @@ include_once 'includes/header.php';
                         </select>
                     </div>
                     
-                    <div class="col-md-4 d-flex align-items-end">
+                    <div class="col-md-3">
+                        <label for="name" class="form-label">Name</label>
+                        <input type="text" id="name" name="name" class="form-control" 
+                               value="<?= htmlspecialchars($name_filter) ?>" 
+                               placeholder="Filter by name">
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label for="number" class="form-label">Number</label>
+                        <input type="text" id="number" name="number" class="form-control" 
+                               value="<?= htmlspecialchars($number_filter) ?>" 
+                               placeholder="Filter by number">
+                    </div>
+                    
+                    <div class="col-md-3 d-flex align-items-end">
                         <button type="submit" class="btn btn-primary w-100">
-                            <i class="bi bi-filter"></i> Apply Filter
+                            <i class="bi bi-filter"></i> Apply Filters
                         </button>
                     </div>
                     
-                    <div class="col-md-4 d-flex align-items-end">
-                        <a href="report_lineage.php" class="btn btn-outline-secondary w-100">
-                            <i class="bi bi-x-circle"></i> Clear Filter
+                    <div class="col-md-12 text-end">
+                        <a href="report_lineage.php" class="btn btn-outline-secondary">
+                            <i class="bi bi-x-circle"></i> Clear Filters
                         </a>
                     </div>
                 </form>
@@ -324,7 +384,7 @@ include_once 'includes/header.php';
         </div>
     </div>
     
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="card shadow-sm h-100">
             <div class="card-header">
                 <h5 class="mb-0">Actions</h5>
