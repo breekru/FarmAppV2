@@ -1,10 +1,15 @@
 <?php
 /**
- * Financial Report Page
+ * Financial Report Page - FIXED VERSION
  * 
  * This page displays financial information for farm animals,
  * including purchases, sales, and overall farm profitability.
  */
+
+// Enable error reporting for debugging
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 
 // Include the configuration file
 require_once 'config.php';
@@ -33,59 +38,8 @@ $startDate = isset($_GET['start_date']) ? $_GET['start_date'] : date('Y-m-d', st
 $endDate = isset($_GET['end_date']) ? $_GET['end_date'] : date('Y-m-d');
 $selectedType = isset($_GET['type']) ? $_GET['type'] : null;
 
-// Get all financial transactions (purchases and sales)
-$transactionsQuery = "
-    SELECT 
-        id, 
-        type, 
-        name, 
-        number, 
-        purch_cost, 
-        date_purchased, 
-        sell_price, 
-        date_sold, 
-        'purchase' as transaction_type 
-    FROM animals 
-    WHERE user_id = :user_id 
-    AND date_purchased IS NOT NULL 
-    AND date_purchased BETWEEN :start_date AND :end_date
-    " . ($selectedType ? "AND type = :type1 " : "") . "
-    
-    UNION ALL
-    
-    SELECT 
-        id, 
-        type, 
-        name, 
-        number, 
-        purch_cost, 
-        date_purchased, 
-        sell_price, 
-        date_sold, 
-        'sale' as transaction_type 
-    FROM animals 
-    WHERE user_id = :user_id 
-    AND date_sold IS NOT NULL 
-    AND date_sold BETWEEN :start_date AND :end_date
-    " . ($selectedType ? "AND type = :type2 " : "") . "
-    
-    ORDER BY date_purchased, date_sold
-";
-
-$transactionsStmt = $db->prepare($transactionsQuery);
-$transactionsStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
-$transactionsStmt->bindParam(':start_date', $startDate, PDO::PARAM_STR);
-$transactionsStmt->bindParam(':end_date', $endDate, PDO::PARAM_STR);
-
-if ($selectedType) {
-    $transactionsStmt->bindParam(':type1', $selectedType, PDO::PARAM_STR);
-    $transactionsStmt->bindParam(':type2', $selectedType, PDO::PARAM_STR);
-}
-
-$transactionsStmt->execute();
-$transactions = $transactionsStmt->fetchAll();
-
-// Calculate financial summary
+// Initialize variables
+$transactions = [];
 $totalPurchases = 0;
 $totalSales = 0;
 $totalProfit = 0;
@@ -93,126 +47,198 @@ $purchasesByType = [];
 $salesByType = [];
 $profitByType = [];
 $monthlyData = [];
-
-// Prepare monthly data array with all months in range
-$startMonth = new DateTime($startDate);
-$endMonth = new DateTime($endDate);
-$interval = new DateInterval('P1M'); // 1 month interval
-$period = new DatePeriod($startMonth, $interval, $endMonth);
-
-foreach ($period as $date) {
-    $monthKey = $date->format('Y-m');
-    $monthlyData[$monthKey] = [
-        'purchases' => 0,
-        'sales' => 0,
-        'profit' => 0,
-        'month_label' => $date->format('M Y')
-    ];
-}
-
-// Add current month if not already included
-$currentMonthKey = date('Y-m');
-if (!isset($monthlyData[$currentMonthKey])) {
-    $monthlyData[$currentMonthKey] = [
-        'purchases' => 0,
-        'sales' => 0,
-        'profit' => 0,
-        'month_label' => date('M Y')
-    ];
-}
-
-// Process transactions to calculate financial metrics
-foreach ($transactions as $transaction) {
-    $animalType = $transaction['type'];
-    
-    // Initialize type data if not exists
-    if (!isset($purchasesByType[$animalType])) {
-        $purchasesByType[$animalType] = 0;
-        $salesByType[$animalType] = 0;
-        $profitByType[$animalType] = 0;
-    }
-    
-    if ($transaction['transaction_type'] === 'purchase' && !empty($transaction['purch_cost'])) {
-        $cost = floatval($transaction['purch_cost']);
-        $totalPurchases += $cost;
-        $purchasesByType[$animalType] += $cost;
-        
-        // Add to monthly data
-        $month = date('Y-m', strtotime($transaction['date_purchased']));
-        if (isset($monthlyData[$month])) {
-            $monthlyData[$month]['purchases'] += $cost;
-            $monthlyData[$month]['profit'] -= $cost;
-        }
-    }
-    
-    if ($transaction['transaction_type'] === 'sale' && !empty($transaction['sell_price'])) {
-        $price = floatval($transaction['sell_price']);
-        $totalSales += $price;
-        $salesByType[$animalType] += $price;
-        
-        // Calculate profit for this animal
-        $cost = !empty($transaction['purch_cost']) ? floatval($transaction['purch_cost']) : 0;
-        $profit = $price - $cost;
-        $totalProfit += $profit;
-        $profitByType[$animalType] += $profit;
-        
-        // Add to monthly data
-        $month = date('Y-m', strtotime($transaction['date_sold']));
-        if (isset($monthlyData[$month])) {
-            $monthlyData[$month]['sales'] += $price;
-            $monthlyData[$month]['profit'] += $profit;
-        }
-    }
-}
-
-// Sort monthly data by date
-ksort($monthlyData);
-
-// Get available animal types for filter dropdown
-$typesStmt = $db->prepare("
-    SELECT DISTINCT type FROM animals 
-    WHERE user_id = :user_id 
-    ORDER BY type
-");
-$typesStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
-$typesStmt->execute();
-$availableTypes = $typesStmt->fetchAll();
-
-// Get animal inventory value
 $inventoryValue = 0;
 $inventoryByType = [];
 
-// Current inventory with costs
-$inventoryStmt = $db->prepare("
-    SELECT 
-        type, 
-        COUNT(*) as count, 
-        SUM(CASE WHEN purch_cost IS NOT NULL THEN purch_cost ELSE 0 END) as total_cost,
-        SUM(CASE WHEN for_sale = 'Yes' AND sell_price IS NOT NULL THEN sell_price ELSE 0 END) as total_listed
-    FROM animals 
-    WHERE user_id = :user_id 
-    AND status = 'Alive'
-    " . ($selectedType ? "AND type = :type " : "") . "
-    GROUP BY type
-");
-$inventoryStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
-if ($selectedType) {
-    $inventoryStmt->bindParam(':type', $selectedType, PDO::PARAM_STR);
-}
-$inventoryStmt->execute();
-$inventory = $inventoryStmt->fetchAll();
+try {
+    // Get all financial transactions (purchases and sales)
+    $transactionsQuery = "
+        SELECT 
+            id, 
+            type, 
+            name, 
+            number, 
+            purch_cost, 
+            date_purchased, 
+            sell_price, 
+            date_sold, 
+            'purchase' as transaction_type 
+        FROM animals 
+        WHERE user_id = :user_id 
+        AND date_purchased IS NOT NULL 
+        AND date_purchased BETWEEN :start_date AND :end_date ";
 
-foreach ($inventory as $item) {
-    $cost = floatval($item['total_cost']);
-    $listedValue = floatval($item['total_listed']);
+    if ($selectedType) {
+        $transactionsQuery .= "AND type = :type1 ";
+    }
     
-    // Use listed value if available, otherwise use the cost
-    $value = ($listedValue > 0) ? $listedValue : $cost;
-    $inventoryValue += $value;
-    $inventoryByType[$item['type']] = [
-        'count' => $item['count'],
-        'value' => $value
-    ];
+    $transactionsQuery .= "UNION ALL
+        
+        SELECT 
+            id, 
+            type, 
+            name, 
+            number, 
+            purch_cost, 
+            date_purchased, 
+            sell_price, 
+            date_sold, 
+            'sale' as transaction_type 
+        FROM animals 
+        WHERE user_id = :user_id 
+        AND date_sold IS NOT NULL 
+        AND date_sold BETWEEN :start_date AND :end_date ";
+    
+    if ($selectedType) {
+        $transactionsQuery .= "AND type = :type2 ";
+    }
+    
+    $transactionsQuery .= "ORDER BY date_purchased, date_sold";
+
+    $transactionsStmt = $db->prepare($transactionsQuery);
+    $transactionsStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
+    $transactionsStmt->bindParam(':start_date', $startDate, PDO::PARAM_STR);
+    $transactionsStmt->bindParam(':end_date', $endDate, PDO::PARAM_STR);
+
+    if ($selectedType) {
+        $transactionsStmt->bindParam(':type1', $selectedType, PDO::PARAM_STR);
+        $transactionsStmt->bindParam(':type2', $selectedType, PDO::PARAM_STR);
+    }
+
+    $transactionsStmt->execute();
+    $transactions = $transactionsStmt->fetchAll();
+
+    // Prepare monthly data array with all months in range
+    $startMonth = new DateTime($startDate);
+    $endMonth = new DateTime($endDate);
+    $interval = new DateInterval('P1M'); // 1 month interval
+    $period = new DatePeriod($startMonth, $interval, $endMonth);
+
+    foreach ($period as $date) {
+        $monthKey = $date->format('Y-m');
+        $monthlyData[$monthKey] = [
+            'purchases' => 0,
+            'sales' => 0,
+            'profit' => 0,
+            'month_label' => $date->format('M Y')
+        ];
+    }
+
+    // Add current month if not already included
+    $currentMonthKey = date('Y-m');
+    if (!isset($monthlyData[$currentMonthKey])) {
+        $monthlyData[$currentMonthKey] = [
+            'purchases' => 0,
+            'sales' => 0,
+            'profit' => 0,
+            'month_label' => date('M Y')
+        ];
+    }
+
+    // Process transactions to calculate financial metrics
+    foreach ($transactions as $transaction) {
+        $animalType = $transaction['type'];
+        
+        // Initialize type data if not exists
+        if (!isset($purchasesByType[$animalType])) {
+            $purchasesByType[$animalType] = 0;
+            $salesByType[$animalType] = 0;
+            $profitByType[$animalType] = 0;
+        }
+        
+        if ($transaction['transaction_type'] === 'purchase' && !empty($transaction['purch_cost'])) {
+            $cost = floatval($transaction['purch_cost']);
+            $totalPurchases += $cost;
+            $purchasesByType[$animalType] += $cost;
+            
+            // Add to monthly data
+            $month = date('Y-m', strtotime($transaction['date_purchased']));
+            if (isset($monthlyData[$month])) {
+                $monthlyData[$month]['purchases'] += $cost;
+                $monthlyData[$month]['profit'] -= $cost;
+            }
+        }
+        
+        if ($transaction['transaction_type'] === 'sale' && !empty($transaction['sell_price'])) {
+            $price = floatval($transaction['sell_price']);
+            $totalSales += $price;
+            $salesByType[$animalType] += $price;
+            
+            // Calculate profit for this animal
+            $cost = !empty($transaction['purch_cost']) ? floatval($transaction['purch_cost']) : 0;
+            $profit = $price - $cost;
+            $totalProfit += $profit;
+            $profitByType[$animalType] += $profit;
+            
+            // Add to monthly data
+            $month = date('Y-m', strtotime($transaction['date_sold']));
+            if (isset($monthlyData[$month])) {
+                $monthlyData[$month]['sales'] += $price;
+                $monthlyData[$month]['profit'] += $profit;
+            }
+        }
+    }
+
+    // Sort monthly data by date
+    ksort($monthlyData);
+
+    // Get available animal types for filter dropdown
+    $typesStmt = $db->prepare("
+        SELECT DISTINCT type FROM animals 
+        WHERE user_id = :user_id 
+        ORDER BY type
+    ");
+    $typesStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
+    $typesStmt->execute();
+    $availableTypes = $typesStmt->fetchAll();
+
+    // Current inventory with costs
+    $inventoryQuery = "
+        SELECT 
+            type, 
+            COUNT(*) as count, 
+            SUM(CASE WHEN purch_cost IS NOT NULL THEN purch_cost ELSE 0 END) as total_cost,
+            SUM(CASE WHEN for_sale = 'Yes' AND sell_price IS NOT NULL THEN sell_price ELSE 0 END) as total_listed
+        FROM animals 
+        WHERE user_id = :user_id 
+        AND status = 'Alive'";
+        
+    if ($selectedType) {
+        $inventoryQuery .= " AND type = :type";
+    }
+    
+    $inventoryQuery .= " GROUP BY type";
+    
+    $inventoryStmt = $db->prepare($inventoryQuery);
+    $inventoryStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
+    
+    if ($selectedType) {
+        $inventoryStmt->bindParam(':type', $selectedType, PDO::PARAM_STR);
+    }
+    
+    $inventoryStmt->execute();
+    $inventory = $inventoryStmt->fetchAll();
+
+    foreach ($inventory as $item) {
+        $cost = !empty($item['total_cost']) ? floatval($item['total_cost']) : 0;
+        $listedValue = !empty($item['total_listed']) ? floatval($item['total_listed']) : 0;
+        
+        // Use listed value if available, otherwise use the cost
+        $value = ($listedValue > 0) ? $listedValue : $cost;
+        $inventoryValue += $value;
+        $inventoryByType[$item['type']] = [
+            'count' => $item['count'],
+            'value' => $value
+        ];
+    }
+} catch (Exception $e) {
+    // Log error for debugging
+    error_log("Financial Report Error: " . $e->getMessage());
+    $_SESSION['alert_message'] = "An error occurred while generating the financial report. Please try again later.";
+    $_SESSION['alert_type'] = "danger";
+    
+    // Uncomment for detailed error display during development
+    // echo "<div class='alert alert-danger'>" . $e->getMessage() . "</div>";
 }
 
 // Include header
@@ -601,7 +627,14 @@ document.addEventListener('DOMContentLoaded', function() {
         echo implode(', ', $labels);
     ?>];
     
-    const typePurchasesData = [<?= implode(', ', array_values($purchasesByType)) ?>];
+    const typePurchasesData = [<?php 
+        $values = [];
+        foreach ($purchasesByType as $value) {
+            $values[] = $value;
+        }
+        echo implode(', ', $values);
+    ?>];
+    
     const typeSalesData = [<?php 
         $values = [];
         foreach ($purchasesByType as $type => $value) {
@@ -759,8 +792,14 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 continue; // Skip incomplete transactions
             }
+            
+            $formattedDate = date('m/d/Y', strtotime($date));
+            $animalName = addslashes($transaction['name']);
+            $animalNumber = addslashes($transaction['number']);
+            $animalType = addslashes($transaction['type']);
+            $formattedAmount = number_format(abs($amount), 2);
         ?>
-        csv.push(['<?= date('m/d/Y', strtotime($date)) ?>', '<?= $transactionType ?>', '<?= addslashes($transaction['name']) ?> (<?= addslashes($transaction['number']) ?>)', '<?= addslashes($transaction['type']) ?>', '$<?= number_format(abs($amount), 2) ?>']);
+        csv.push(['<?= $formattedDate ?>', '<?= $transactionType ?>', '<?= $animalName ?> (<?= $animalNumber ?>)', '<?= $animalType ?>', '$<?= $formattedAmount ?>']);
         <?php endforeach; ?>
         
         // Convert array to CSV string
