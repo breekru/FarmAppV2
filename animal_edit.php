@@ -409,7 +409,6 @@ if (isset($_GET['edit_note']) && !empty($_GET['edit_note'])) {
 // Process main animal form submission
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_animal'])) {
 
-
 // Get form data and sanitize - FIXED version for date fields
 $type = filter_input(INPUT_POST, 'type', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
 $breed = filter_input(INPUT_POST, 'breed', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
@@ -435,6 +434,9 @@ $for_sale = filter_input(INPUT_POST, 'for_sale', FILTER_SANITIZE_FULL_SPECIAL_CH
 $reg_num = filter_input(INPUT_POST, 'reg_num', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
 $reg_name = filter_input(INPUT_POST, 'reg_name', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
 $color = filter_input(INPUT_POST, 'color', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+
+// Set pending_completion to 'No' when saving edits
+$pending_completion = 'No';
 
     // Validate required fields
     if (empty($type)) {
@@ -476,6 +478,7 @@ $color = filter_input(INPUT_POST, 'color', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
                     reg_num = :reg_num,
                     reg_name = :reg_name,
                     color = :color,
+                    pending_completion = :pending_completion,
                     updated_at = NOW()
                 WHERE id = :id AND user_id = :user_id
             ";
@@ -501,6 +504,7 @@ $color = filter_input(INPUT_POST, 'color', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
             $updateStmt->bindParam(':reg_num', $reg_num);
             $updateStmt->bindParam(':reg_name', $reg_name);
             $updateStmt->bindParam(':color', $color);
+            $updateStmt->bindParam(':pending_completion', $pending_completion);
             $updateStmt->bindParam(':id', $id);
             $updateStmt->bindParam(':user_id', $current_user);
             
