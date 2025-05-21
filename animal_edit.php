@@ -1,8 +1,9 @@
 <?php
 /**
- * Animal Edit Page - FIXED
+ * Animal Edit Page - ENHANCED VERSION
  * 
  * This page allows users to edit an existing animal's information.
+ * Enhanced with structured medication and notes entries.
  */
 
 // Include the configuration file
@@ -88,7 +89,325 @@ $sires = $sireStmt->fetchAll();
 $errors = [];
 $success = false;
 
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
+// Process medication and notes CRUD operations
+// Add new medication entry
+if (isset($_POST['add_medication'])) {
+    $med_date = $_POST['med_date'] ?? date('Y-m-d');
+    $med_type = $_POST['med_type'] ?? '';
+    $med_amount = $_POST['med_amount'] ?? '';
+    $med_notes = $_POST['med_notes'] ?? '';
+    
+    if (empty($med_type)) {
+        $errors[] = "Medication type is required";
+    } elseif (empty($med_amount)) {
+        $errors[] = "Medication amount is required";
+    } else {
+        try {
+            $medStmt = $db->prepare("
+                INSERT INTO animal_medications (animal_id, date, type, amount, notes)
+                VALUES (:animal_id, :date, :type, :amount, :notes)
+            ");
+            $medStmt->bindParam(':animal_id', $id, PDO::PARAM_INT);
+            $medStmt->bindParam(':date', $med_date, PDO::PARAM_STR);
+            $medStmt->bindParam(':type', $med_type, PDO::PARAM_STR);
+            $medStmt->bindParam(':amount', $med_amount, PDO::PARAM_STR);
+            $medStmt->bindParam(':notes', $med_notes, PDO::PARAM_STR);
+            
+            if ($medStmt->execute()) {
+                $_SESSION['alert_message'] = "Medication entry added successfully!";
+                $_SESSION['alert_type'] = "success";
+                header("location: animal_edit.php?id=$id#medications");
+                exit;
+            } else {
+                $errors[] = "Failed to add medication entry";
+            }
+        } catch (Exception $e) {
+            $errors[] = "Database error: " . $e->getMessage();
+        }
+    }
+}
+
+// Delete medication entry
+if (isset($_GET['delete_medication']) && !empty($_GET['delete_medication'])) {
+    $med_id = intval($_GET['delete_medication']);
+    
+    try {
+        // Verify the medication belongs to this animal
+        $checkStmt = $db->prepare("
+            SELECT id FROM animal_medications 
+            WHERE id = :med_id AND animal_id = :animal_id
+        ");
+        $checkStmt->bindParam(':med_id', $med_id, PDO::PARAM_INT);
+        $checkStmt->bindParam(':animal_id', $id, PDO::PARAM_INT);
+        $checkStmt->execute();
+        
+        if ($checkStmt->rowCount() > 0) {
+            $deleteStmt = $db->prepare("DELETE FROM animal_medications WHERE id = :med_id");
+            $deleteStmt->bindParam(':med_id', $med_id, PDO::PARAM_INT);
+            
+            if ($deleteStmt->execute()) {
+                $_SESSION['alert_message'] = "Medication entry deleted successfully!";
+                $_SESSION['alert_type'] = "success";
+                header("location: animal_edit.php?id=$id#medications");
+                exit;
+            } else {
+                $errors[] = "Failed to delete medication entry";
+            }
+        } else {
+            $errors[] = "Medication entry not found or doesn't belong to this animal";
+        }
+    } catch (Exception $e) {
+        $errors[] = "Database error: " . $e->getMessage();
+    }
+}
+
+// Update medication entry
+if (isset($_POST['update_medication'])) {
+    $med_id = intval($_POST['med_id'] ?? 0);
+    $med_date = $_POST['med_date'] ?? date('Y-m-d');
+    $med_type = $_POST['med_type'] ?? '';
+    $med_amount = $_POST['med_amount'] ?? '';
+    $med_notes = $_POST['med_notes'] ?? '';
+    
+    if (empty($med_type)) {
+        $errors[] = "Medication type is required";
+    } elseif (empty($med_amount)) {
+        $errors[] = "Medication amount is required";
+    } else {
+        try {
+            // Verify the medication belongs to this animal
+            $checkStmt = $db->prepare("
+                SELECT id FROM animal_medications 
+                WHERE id = :med_id AND animal_id = :animal_id
+            ");
+            $checkStmt->bindParam(':med_id', $med_id, PDO::PARAM_INT);
+            $checkStmt->bindParam(':animal_id', $id, PDO::PARAM_INT);
+            $checkStmt->execute();
+            
+            if ($checkStmt->rowCount() > 0) {
+                $updateStmt = $db->prepare("
+                    UPDATE animal_medications 
+                    SET date = :date, type = :type, amount = :amount, notes = :notes, updated_at = NOW()
+                    WHERE id = :med_id
+                ");
+                $updateStmt->bindParam(':date', $med_date, PDO::PARAM_STR);
+                $updateStmt->bindParam(':type', $med_type, PDO::PARAM_STR);
+                $updateStmt->bindParam(':amount', $med_amount, PDO::PARAM_STR);
+                $updateStmt->bindParam(':notes', $med_notes, PDO::PARAM_STR);
+                $updateStmt->bindParam(':med_id', $med_id, PDO::PARAM_INT);
+                
+                if ($updateStmt->execute()) {
+                    $_SESSION['alert_message'] = "Medication entry updated successfully!";
+                    $_SESSION['alert_type'] = "success";
+                    header("location: animal_edit.php?id=$id#medications");
+                    exit;
+                } else {
+                    $errors[] = "Failed to update medication entry";
+                }
+            } else {
+                $errors[] = "Medication entry not found or doesn't belong to this animal";
+            }
+        } catch (Exception $e) {
+            $errors[] = "Database error: " . $e->getMessage();
+        }
+    }
+}
+
+// Add new note entry
+if (isset($_POST['add_note'])) {
+    $note_date = $_POST['note_date'] ?? date('Y-m-d');
+    $note_title = $_POST['note_title'] ?? '';
+    $note_content = $_POST['note_content'] ?? '';
+    
+    if (empty($note_title)) {
+        $errors[] = "Note title is required";
+    } elseif (empty($note_content)) {
+        $errors[] = "Note content is required";
+    } else {
+        try {
+            $noteStmt = $db->prepare("
+                INSERT INTO animal_notes (animal_id, date, title, content)
+                VALUES (:animal_id, :date, :title, :content)
+            ");
+            $noteStmt->bindParam(':animal_id', $id, PDO::PARAM_INT);
+            $noteStmt->bindParam(':date', $note_date, PDO::PARAM_STR);
+            $noteStmt->bindParam(':title', $note_title, PDO::PARAM_STR);
+            $noteStmt->bindParam(':content', $note_content, PDO::PARAM_STR);
+            
+            if ($noteStmt->execute()) {
+                $_SESSION['alert_message'] = "Note entry added successfully!";
+                $_SESSION['alert_type'] = "success";
+                header("location: animal_edit.php?id=$id#notes");
+                exit;
+            } else {
+                $errors[] = "Failed to add note entry";
+            }
+        } catch (Exception $e) {
+            $errors[] = "Database error: " . $e->getMessage();
+        }
+    }
+}
+
+// Delete note entry
+if (isset($_GET['delete_note']) && !empty($_GET['delete_note'])) {
+    $note_id = intval($_GET['delete_note']);
+    
+    try {
+        // Verify the note belongs to this animal
+        $checkStmt = $db->prepare("
+            SELECT id FROM animal_notes 
+            WHERE id = :note_id AND animal_id = :animal_id
+        ");
+        $checkStmt->bindParam(':note_id', $note_id, PDO::PARAM_INT);
+        $checkStmt->bindParam(':animal_id', $id, PDO::PARAM_INT);
+        $checkStmt->execute();
+        
+        if ($checkStmt->rowCount() > 0) {
+            $deleteStmt = $db->prepare("DELETE FROM animal_notes WHERE id = :note_id");
+            $deleteStmt->bindParam(':note_id', $note_id, PDO::PARAM_INT);
+            
+            if ($deleteStmt->execute()) {
+                $_SESSION['alert_message'] = "Note entry deleted successfully!";
+                $_SESSION['alert_type'] = "success";
+                header("location: animal_edit.php?id=$id#notes");
+                exit;
+            } else {
+                $errors[] = "Failed to delete note entry";
+            }
+        } else {
+            $errors[] = "Note entry not found or doesn't belong to this animal";
+        }
+    } catch (Exception $e) {
+        $errors[] = "Database error: " . $e->getMessage();
+    }
+}
+
+// Update note entry
+if (isset($_POST['update_note'])) {
+    $note_id = intval($_POST['note_id'] ?? 0);
+    $note_date = $_POST['note_date'] ?? date('Y-m-d');
+    $note_title = $_POST['note_title'] ?? '';
+    $note_content = $_POST['note_content'] ?? '';
+    
+    if (empty($note_title)) {
+        $errors[] = "Note title is required";
+    } elseif (empty($note_content)) {
+        $errors[] = "Note content is required";
+    } else {
+        try {
+            // Verify the note belongs to this animal
+            $checkStmt = $db->prepare("
+                SELECT id FROM animal_notes 
+                WHERE id = :note_id AND animal_id = :animal_id
+            ");
+            $checkStmt->bindParam(':note_id', $note_id, PDO::PARAM_INT);
+            $checkStmt->bindParam(':animal_id', $id, PDO::PARAM_INT);
+            $checkStmt->execute();
+            
+            if ($checkStmt->rowCount() > 0) {
+                $updateStmt = $db->prepare("
+                    UPDATE animal_notes 
+                    SET date = :date, title = :title, content = :content, updated_at = NOW()
+                    WHERE id = :note_id
+                ");
+                $updateStmt->bindParam(':date', $note_date, PDO::PARAM_STR);
+                $updateStmt->bindParam(':title', $note_title, PDO::PARAM_STR);
+                $updateStmt->bindParam(':content', $note_content, PDO::PARAM_STR);
+                $updateStmt->bindParam(':note_id', $note_id, PDO::PARAM_INT);
+                
+                if ($updateStmt->execute()) {
+                    $_SESSION['alert_message'] = "Note entry updated successfully!";
+                    $_SESSION['alert_type'] = "success";
+                    header("location: animal_edit.php?id=$id#notes");
+                    exit;
+                } else {
+                    $errors[] = "Failed to update note entry";
+                }
+            } else {
+                $errors[] = "Note entry not found or doesn't belong to this animal";
+            }
+        } catch (Exception $e) {
+            $errors[] = "Database error: " . $e->getMessage();
+        }
+    }
+}
+
+// Fetch existing medication entries
+$medications = [];
+try {
+    $medStmt = $db->prepare("
+        SELECT * FROM animal_medications
+        WHERE animal_id = :animal_id
+        ORDER BY date DESC
+    ");
+    $medStmt->bindParam(':animal_id', $id, PDO::PARAM_INT);
+    $medStmt->execute();
+    $medications = $medStmt->fetchAll();
+} catch (Exception $e) {
+    error_log("Error fetching medication entries: " . $e->getMessage());
+}
+
+// Fetch existing note entries
+$notes = [];
+try {
+    $noteStmt = $db->prepare("
+        SELECT * FROM animal_notes
+        WHERE animal_id = :animal_id
+        ORDER BY date DESC
+    ");
+    $noteStmt->bindParam(':animal_id', $id, PDO::PARAM_INT);
+    $noteStmt->execute();
+    $notes = $noteStmt->fetchAll();
+} catch (Exception $e) {
+    error_log("Error fetching note entries: " . $e->getMessage());
+}
+
+// Fetch a specific medication for editing if requested
+$edit_medication = null;
+if (isset($_GET['edit_medication']) && !empty($_GET['edit_medication'])) {
+    $med_id = intval($_GET['edit_medication']);
+    
+    try {
+        $editMedStmt = $db->prepare("
+            SELECT * FROM animal_medications
+            WHERE id = :med_id AND animal_id = :animal_id
+        ");
+        $editMedStmt->bindParam(':med_id', $med_id, PDO::PARAM_INT);
+        $editMedStmt->bindParam(':animal_id', $id, PDO::PARAM_INT);
+        $editMedStmt->execute();
+        
+        if ($editMedStmt->rowCount() > 0) {
+            $edit_medication = $editMedStmt->fetch();
+        }
+    } catch (Exception $e) {
+        error_log("Error fetching medication entry for editing: " . $e->getMessage());
+    }
+}
+
+// Fetch a specific note for editing if requested
+$edit_note = null;
+if (isset($_GET['edit_note']) && !empty($_GET['edit_note'])) {
+    $note_id = intval($_GET['edit_note']);
+    
+    try {
+        $editNoteStmt = $db->prepare("
+            SELECT * FROM animal_notes
+            WHERE id = :note_id AND animal_id = :animal_id
+        ");
+        $editNoteStmt->bindParam(':note_id', $note_id, PDO::PARAM_INT);
+        $editNoteStmt->bindParam(':animal_id', $id, PDO::PARAM_INT);
+        $editNoteStmt->execute();
+        
+        if ($editNoteStmt->rowCount() > 0) {
+            $edit_note = $editNoteStmt->fetch();
+        }
+    } catch (Exception $e) {
+        error_log("Error fetching note entry for editing: " . $e->getMessage());
+    }
+}
+
+// Process main animal form submission
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_animal'])) {
 
 
 // Get form data and sanitize - FIXED version for date fields
@@ -112,29 +431,11 @@ $sell_info = filter_input(INPUT_POST, 'sell_info', FILTER_SANITIZE_FULL_SPECIAL_
 $purch_cost = filter_input(INPUT_POST, 'purch_cost', FILTER_SANITIZE_FULL_SPECIAL_CHARS) ?: null;
 $purch_info = filter_input(INPUT_POST, 'purch_info', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
     
-// FIX: Better handling for notes and medication fields
-$notes = isset($_POST['notes']) ? trim($_POST['notes']) : '';
-$meds = isset($_POST['meds']) ? trim($_POST['meds']) : '';
-    
 $for_sale = filter_input(INPUT_POST, 'for_sale', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
 $reg_num = filter_input(INPUT_POST, 'reg_num', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
 $reg_name = filter_input(INPUT_POST, 'reg_name', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
 $color = filter_input(INPUT_POST, 'color', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
 
-    $sell_price = filter_input(INPUT_POST, 'sell_price', FILTER_SANITIZE_FULL_SPECIAL_CHARS) ?: null;
-    $sell_info = filter_input(INPUT_POST, 'sell_info', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
-    $purch_cost = filter_input(INPUT_POST, 'purch_cost', FILTER_SANITIZE_FULL_SPECIAL_CHARS) ?: null;
-    $purch_info = filter_input(INPUT_POST, 'purch_info', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
-    
-    // FIX: Better handling for notes and medication fields
-    $notes = isset($_POST['notes']) ? trim($_POST['notes']) : '';
-    $meds = isset($_POST['meds']) ? trim($_POST['meds']) : '';
-    
-    $for_sale = filter_input(INPUT_POST, 'for_sale', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
-    $reg_num = filter_input(INPUT_POST, 'reg_num', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
-    $reg_name = filter_input(INPUT_POST, 'reg_name', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
-    $color = filter_input(INPUT_POST, 'color', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
-    
     // Validate required fields
     if (empty($type)) {
         $errors[] = "Type is required";
@@ -171,8 +472,6 @@ $color = filter_input(INPUT_POST, 'color', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
                     sell_info = :sell_info,
                     purch_cost = :purch_cost,
                     purch_info = :purch_info,
-                    notes = :notes,
-                    meds = :meds,
                     for_sale = :for_sale,
                     reg_num = :reg_num,
                     reg_name = :reg_name,
@@ -198,11 +497,6 @@ $color = filter_input(INPUT_POST, 'color', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
             $updateStmt->bindParam(':sell_info', $sell_info);
             $updateStmt->bindParam(':purch_cost', $purch_cost);
             $updateStmt->bindParam(':purch_info', $purch_info);
-            
-            // FIX: Correctly bind notes and meds as PDO::PARAM_STR
-            $updateStmt->bindParam(':notes', $notes, PDO::PARAM_STR);
-            $updateStmt->bindParam(':meds', $meds, PDO::PARAM_STR);
-            
             $updateStmt->bindParam(':for_sale', $for_sale);
             $updateStmt->bindParam(':reg_num', $reg_num);
             $updateStmt->bindParam(':reg_name', $reg_name);
@@ -290,240 +584,588 @@ include_once 'includes/header.php';
 </div>
 <?php endif; ?>
 
-<div class="card shadow-sm">
-    <div class="card-header">
-        <h3 class="card-title mb-0">Edit Animal Information</h3>
-    </div>
-    <div class="card-body">
-        <form action="animal_edit.php?id=<?= $id ?>" method="post" enctype="multipart/form-data">
-            <div class="row">
-                <!-- Basic Information -->
-                <div class="col-md-6">
-                    <h4>Basic Information</h4>
-                    
-                    <div class="mb-3">
-                        <label for="type" class="form-label">Type *</label>
-                        <select id="type" name="type" class="form-select" required>
-                            <option value="">Select Type</option>
-                            <option value="Sheep" <?= $animal['type'] === 'Sheep' ? 'selected' : '' ?>>Sheep</option>
-                            <option value="Chicken" <?= $animal['type'] === 'Chicken' ? 'selected' : '' ?>>Chicken</option>
-                            <option value="Turkey" <?= $animal['type'] === 'Turkey' ? 'selected' : '' ?>>Turkey</option>
-                            <option value="Pig" <?= $animal['type'] === 'Pig' ? 'selected' : '' ?>>Pig</option>
-                            <option value="Cow" <?= $animal['type'] === 'Cow' ? 'selected' : '' ?>>Cow</option>
-                        </select>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="breed" class="form-label">Breed</label>
-                        <input type="text" id="breed" name="breed" class="form-control" 
-                               value="<?= htmlspecialchars($animal['breed']) ?>">
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="number" class="form-label">Number *</label>
-                        <input type="text" id="number" name="number" class="form-control" required
-                               value="<?= htmlspecialchars($animal['number']) ?>">
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="name" class="form-label">Name *</label>
-                        <input type="text" id="name" name="name" class="form-control" required
-                               value="<?= htmlspecialchars($animal['name']) ?>">
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="color" class="form-label">Color Description</label>
-                        <input type="text" id="color" name="color" class="form-control"
-                               value="<?= htmlspecialchars($animal['color']) ?>">
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="gender" class="form-label">Gender *</label>
-                        <select id="gender" name="gender" class="form-select" required>
-                            <option value="">Select Gender</option>
-                            <option value="Male" <?= $animal['gender'] === 'Male' ? 'selected' : '' ?>>Male</option>
-                            <option value="Female" <?= $animal['gender'] === 'Female' ? 'selected' : '' ?>>Female</option>
-                        </select>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="status" class="form-label">Status *</label>
-                        <select id="status" name="status" class="form-select" required>
-                            <option value="">Select Status</option>
-                            <option value="Alive" <?= $animal['status'] === 'Alive' ? 'selected' : '' ?>>Alive</option>
-                            <option value="Dead" <?= $animal['status'] === 'Dead' ? 'selected' : '' ?>>Dead</option>
-                            <option value="Sold" <?= $animal['status'] === 'Sold' ? 'selected' : '' ?>>Sold</option>
-                            <option value="For Sale" <?= $animal['status'] === 'For Sale' ? 'selected' : '' ?>>For Sale</option>
-                            <option value="Harvested" <?= $animal['status'] === 'Harvested' ? 'selected' : '' ?>>Harvested</option>
-                        </select>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="for_sale" class="form-label">List for Sale?</label>
-                        <select id="for_sale" name="for_sale" class="form-select">
-                            <option value="No" <?= $animal['for_sale'] === 'No' ? 'selected' : '' ?>>No</option>
-                            <option value="Yes" <?= $animal['for_sale'] === 'Yes' ? 'selected' : '' ?>>Yes</option>
-                            <option value="Has Been Sold" <?= $animal['for_sale'] === 'Has Been Sold' ? 'selected' : '' ?>>Has Been Sold</option>
-                        </select>
-                    </div>
-                </div>
-                
-                <!-- Dates and Lineage Information -->
-                <div class="col-md-6">
-                    <h4>Dates & Lineage</h4>
-                    
-                    <div class="mb-3">
-                        <label for="dob" class="form-label">Date of Birth</label>
-                        <input type="date" id="dob" name="dob" class="form-control" 
-                               value="<?= htmlspecialchars($animal['dob']) ?>">
-                    </div>
-                    
-                    <div class="mb-3 status-dependent" data-status="Dead,Harvested">
-                        <label for="dod" class="form-label">Date of Death/Dispatch</label>
-                        <input type="date" id="dod" name="dod" class="form-control" 
-                               value="<?= htmlspecialchars($animal['dod']) ?>">
-                    </div>
-                    
-                    <div class="mb-3">
-    <label for="dam_id" class="form-label">Dam (Mother)</label>
-    <select id="dam_id" name="dam_id" class="form-select">
-        <option value="">None Selected</option>
-        <?php foreach ($dams as $dam): ?>
-        <option value="<?= $dam['id'] ?>" data-type="<?= htmlspecialchars($dam['type']) ?>" <?= $animal['dam_id'] == $dam['id'] ? 'selected' : '' ?>>
-            <?= htmlspecialchars($dam['name']) ?> (<?= htmlspecialchars($dam['number']) ?>)
-        </option>
-        <?php endforeach; ?>
-    </select>
-</div>
+<!-- Tabs Navigation -->
+<ul class="nav nav-tabs mb-4" id="animalTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="details-tab" data-bs-toggle="tab" data-bs-target="#details" type="button" role="tab" aria-controls="details" aria-selected="true">
+            <i class="bi bi-card-list"></i> Details
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="medications-tab" data-bs-toggle="tab" data-bs-target="#medications" type="button" role="tab" aria-controls="medications" aria-selected="false">
+            <i class="bi bi-capsule"></i> Medications
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="notes-tab" data-bs-toggle="tab" data-bs-target="#notes" type="button" role="tab" aria-controls="notes" aria-selected="false">
+            <i class="bi bi-journal-text"></i> Notes
+        </button>
+    </li>
+</ul>
 
-<div class="mb-3">
-    <label for="sire_id" class="form-label">Sire (Father)</label>
-    <select id="sire_id" name="sire_id" class="form-select">
-        <option value="">None Selected</option>
-        <?php foreach ($sires as $sire): ?>
-        <option value="<?= $sire['id'] ?>" data-type="<?= htmlspecialchars($sire['type']) ?>" <?= $animal['sire_id'] == $sire['id'] ? 'selected' : '' ?>>
-            <?= htmlspecialchars($sire['name']) ?> (<?= htmlspecialchars($sire['number']) ?>)
-        </option>
-        <?php endforeach; ?>
-    </select>
-</div>
-                    
-                    <h4 class="mt-4">Registration</h4>
-                    
-                    <div class="mb-3">
-                        <label for="reg_num" class="form-label">Registration Number</label>
-                        <input type="text" id="reg_num" name="reg_num" class="form-control" 
-                               value="<?= htmlspecialchars($animal['reg_num']) ?>">
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="reg_name" class="form-label">Registration Name</label>
-                        <input type="text" id="reg_name" name="reg_name" class="form-control" 
-                               value="<?= htmlspecialchars($animal['reg_name']) ?>">
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="image" class="form-label">Animal Image</label>
-                        <?php if (!empty($animal['image'])): ?>
-                        <div class="mb-2">
-                            <img src="assets/img/animals/<?= htmlspecialchars($animal['image']) ?>" 
-                                 alt="Current image" class="img-thumbnail" style="max-height: 100px;">
-                        </div>
-                        <?php endif; ?>
-                        <input type="file" id="image" name="image" class="form-control" accept="image/*">
-                        <div class="form-text">Upload a new image to replace the current one. Leave empty to keep the existing image.</div>
-                    </div>
-                </div>
+<div class="tab-content" id="animalTabsContent">
+    <!-- Details Tab -->
+    <div class="tab-pane fade show active" id="details" role="tabpanel" aria-labelledby="details-tab">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h3 class="card-title mb-0">Edit Animal Information</h3>
             </div>
-            
-            <div class="row mt-4">
-                <!-- Purchase Information -->
-                <div class="col-md-6">
-                    <h4>Purchase Information</h4>
-                    
-                    <div class="mb-3">
-                        <label for="date_purchased" class="form-label">Date Purchased</label>
-                        <input type="date" id="date_purchased" name="date_purchased" class="form-control" 
-                               value="<?= htmlspecialchars($animal['date_purchased']) ?>">
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="purch_cost" class="form-label">Purchase Cost</label>
-                        <div class="input-group">
-                            <span class="input-group-text">$</span>
-                            <input type="text" id="purch_cost" name="purch_cost" class="form-control" 
-                                   value="<?= htmlspecialchars($animal['purch_cost']) ?>">
+            <div class="card-body">
+                <form action="animal_edit.php?id=<?= $id ?>" method="post" enctype="multipart/form-data">
+                    <input type="hidden" name="update_animal" value="1">
+                    <div class="row">
+                        <!-- Basic Information -->
+                        <div class="col-md-6">
+                            <h4>Basic Information</h4>
+                            
+                            <div class="mb-3">
+                                <label for="type" class="form-label">Type *</label>
+                                <select id="type" name="type" class="form-select" required>
+                                    <option value="">Select Type</option>
+                                    <option value="Sheep" <?= $animal['type'] === 'Sheep' ? 'selected' : '' ?>>Sheep</option>
+                                    <option value="Chicken" <?= $animal['type'] === 'Chicken' ? 'selected' : '' ?>>Chicken</option>
+                                    <option value="Turkey" <?= $animal['type'] === 'Turkey' ? 'selected' : '' ?>>Turkey</option>
+                                    <option value="Pig" <?= $animal['type'] === 'Pig' ? 'selected' : '' ?>>Pig</option>
+                                    <option value="Cow" <?= $animal['type'] === 'Cow' ? 'selected' : '' ?>>Cow</option>
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="breed" class="form-label">Breed</label>
+                                <input type="text" id="breed" name="breed" class="form-control" 
+                                       value="<?= htmlspecialchars($animal['breed']) ?>">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="number" class="form-label">Number *</label>
+                                <input type="text" id="number" name="number" class="form-control" required
+                                       value="<?= htmlspecialchars($animal['number']) ?>">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="name" class="form-label">Name *</label>
+                                <input type="text" id="name" name="name" class="form-control" required
+                                       value="<?= htmlspecialchars($animal['name']) ?>">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="color" class="form-label">Color Description</label>
+                                <input type="text" id="color" name="color" class="form-control"
+                                       value="<?= htmlspecialchars($animal['color']) ?>">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="gender" class="form-label">Gender *</label>
+                                <select id="gender" name="gender" class="form-select" required>
+                                    <option value="">Select Gender</option>
+                                    <option value="Male" <?= $animal['gender'] === 'Male' ? 'selected' : '' ?>>Male</option>
+                                    <option value="Female" <?= $animal['gender'] === 'Female' ? 'selected' : '' ?>>Female</option>
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="status" class="form-label">Status *</label>
+                                <select id="status" name="status" class="form-select" required>
+                                    <option value="">Select Status</option>
+                                    <option value="Alive" <?= $animal['status'] === 'Alive' ? 'selected' : '' ?>>Alive</option>
+                                    <option value="Dead" <?= $animal['status'] === 'Dead' ? 'selected' : '' ?>>Dead</option>
+                                    <option value="Sold" <?= $animal['status'] === 'Sold' ? 'selected' : '' ?>>Sold</option>
+                                    <option value="For Sale" <?= $animal['status'] === 'For Sale' ? 'selected' : '' ?>>For Sale</option>
+                                    <option value="Harvested" <?= $animal['status'] === 'Harvested' ? 'selected' : '' ?>>Harvested</option>
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="for_sale" class="form-label">List for Sale?</label>
+                                <select id="for_sale" name="for_sale" class="form-select">
+                                    <option value="No" <?= $animal['for_sale'] === 'No' ? 'selected' : '' ?>>No</option>
+                                    <option value="Yes" <?= $animal['for_sale'] === 'Yes' ? 'selected' : '' ?>>Yes</option>
+                                    <option value="Has Been Sold" <?= $animal['for_sale'] === 'Has Been Sold' ? 'selected' : '' ?>>Has Been Sold</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <!-- Dates and Lineage Information -->
+                        <div class="col-md-6">
+                            <h4>Dates & Lineage</h4>
+                            
+                            <div class="mb-3">
+                                <label for="dob" class="form-label">Date of Birth</label>
+                                <input type="date" id="dob" name="dob" class="form-control" 
+                                       value="<?= htmlspecialchars($animal['dob']) ?>">
+                            </div>
+                            
+                            <div class="mb-3 status-dependent" data-status="Dead,Harvested">
+                                <label for="dod" class="form-label">Date of Death/Dispatch</label>
+                                <input type="date" id="dod" name="dod" class="form-control" 
+                                       value="<?= htmlspecialchars($animal['dod']) ?>">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="dam_id" class="form-label">Dam (Mother)</label>
+                                <select id="dam_id" name="dam_id" class="form-select">
+                                    <option value="">None Selected</option>
+                                    <?php foreach ($dams as $dam): ?>
+                                    <option value="<?= $dam['id'] ?>" data-type="<?= htmlspecialchars($dam['type']) ?>" <?= $animal['dam_id'] == $dam['id'] ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars($dam['name']) ?> (<?= htmlspecialchars($dam['number']) ?>)
+                                    </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="sire_id" class="form-label">Sire (Father)</label>
+                                <select id="sire_id" name="sire_id" class="form-select">
+                                    <option value="">None Selected</option>
+                                    <?php foreach ($sires as $sire): ?>
+                                    <option value="<?= $sire['id'] ?>" data-type="<?= htmlspecialchars($sire['type']) ?>" <?= $animal['sire_id'] == $sire['id'] ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars($sire['name']) ?> (<?= htmlspecialchars($sire['number']) ?>)
+                                    </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            
+                            <h4 class="mt-4">Registration</h4>
+                            
+                            <div class="mb-3">
+                                <label for="reg_num" class="form-label">Registration Number</label>
+                                <input type="text" id="reg_num" name="reg_num" class="form-control" 
+                                       value="<?= htmlspecialchars($animal['reg_num']) ?>">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="reg_name" class="form-label">Registration Name</label>
+                                <input type="text" id="reg_name" name="reg_name" class="form-control" 
+                                       value="<?= htmlspecialchars($animal['reg_name']) ?>">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="image" class="form-label">Animal Image</label>
+                                <?php if (!empty($animal['image'])): ?>
+                                <div class="mb-2">
+                                    <img src="assets/img/animals/<?= htmlspecialchars($animal['image']) ?>" 
+                                         alt="Current image" class="img-thumbnail" style="max-height: 100px;">
+                                </div>
+                                <?php endif; ?>
+                                <input type="file" id="image" name="image" class="form-control" accept="image/*">
+                                <div class="form-text">Upload a new image to replace the current one. Leave empty to keep the existing image.</div>
+                            </div>
                         </div>
                     </div>
                     
-                    <div class="mb-3">
-                        <label for="purch_info" class="form-label">Seller Information</label>
-                        <input type="text" id="purch_info" name="purch_info" class="form-control" 
-                               value="<?= htmlspecialchars($animal['purch_info']) ?>">
+                    <div class="row mt-4">
+                        <!-- Purchase Information -->
+                        <div class="col-md-6">
+                            <h4>Purchase Information</h4>
+                            
+                            <div class="mb-3">
+                                <label for="date_purchased" class="form-label">Date Purchased</label>
+                                <input type="date" id="date_purchased" name="date_purchased" class="form-control" 
+                                       value="<?= htmlspecialchars($animal['date_purchased']) ?>">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="purch_cost" class="form-label">Purchase Cost</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="text" id="purch_cost" name="purch_cost" class="form-control" 
+                                           value="<?= htmlspecialchars($animal['purch_cost']) ?>">
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="purch_info" class="form-label">Seller Information</label>
+                                <input type="text" id="purch_info" name="purch_info" class="form-control" 
+                                       value="<?= htmlspecialchars($animal['purch_info']) ?>">
+                            </div>
+                        </div>
+                        
+                        <!-- Sale Information -->
+                        <div class="col-md-6">
+                            <h4>Sale Information</h4>
+                            
+                            <div class="mb-3 status-dependent" data-status="Sold">
+                                <label for="date_sold" class="form-label">Date Sold</label>
+                                <input type="date" id="date_sold" name="date_sold" class="form-control" 
+                                       value="<?= htmlspecialchars($animal['date_sold']) ?>">
+                            </div>
+                            
+                            <div class="mb-3 status-dependent" data-status="Sold,For Sale">
+                                <label for="sell_price" class="form-label">Sale Price</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="text" id="sell_price" name="sell_price" class="form-control" 
+                                           value="<?= htmlspecialchars($animal['sell_price']) ?>">
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3 status-dependent" data-status="Sold">
+                                <label for="sell_info" class="form-label">Buyer Information</label>
+                                <input type="text" id="sell_info" name="sell_info" class="form-control" 
+                                       value="<?= htmlspecialchars($animal['sell_info']) ?>">
+                            </div>
+                        </div>
                     </div>
+                    
+                    <div class="row mt-4">
+                        <div class="col-12 text-center">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="bi bi-save"></i> Save Changes
+                            </button>
+                            <a href="animal_view.php?id=<?= $id ?>" class="btn btn-secondary btn-lg ms-2">
+                                <i class="bi bi-x-circle"></i> Cancel
+                            </a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Medications Tab -->
+    <div class="tab-pane fade" id="medications" role="tabpanel" aria-labelledby="medications-tab">
+        <div class="card shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="card-title mb-0">Medication History</h3>
+                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addMedicationModal">
+                    <i class="bi bi-plus-circle"></i> Add Medication
+                </button>
+            </div>
+            <div class="card-body">
+                <?php if (empty($medications)): ?>
+                <div class="alert alert-info">
+                    <p>No medication records found for this animal. Click the "Add Medication" button to add a medication entry.</p>
                 </div>
+                <?php else: ?>
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Amount</th>
+                                <th>Notes</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($medications as $med): ?>
+                            <tr>
+                                <td><?= date('M j, Y', strtotime($med['date'])) ?></td>
+                                <td><?= htmlspecialchars($med['type']) ?></td>
+                                <td><?= htmlspecialchars($med['amount']) ?></td>
+                                <td>
+                                    <?php if (!empty($med['notes'])): ?>
+                                    <button type="button" class="btn btn-sm btn-outline-info" data-bs-toggle="popover" 
+                                            title="Medication Notes" data-bs-content="<?= htmlspecialchars($med['notes']) ?>">
+                                        <i class="bi bi-info-circle"></i> View Notes
+                                    </button>
+                                    <?php else: ?>
+                                    <span class="text-muted">No notes</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="animal_edit.php?id=<?= $id ?>&edit_medication=<?= $med['id'] ?>#medications" class="btn btn-outline-primary">
+                                            <i class="bi bi-pencil"></i> Edit
+                                        </a>
+                                        <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteMedicationModal<?= $med['id'] ?>">
+                                            <i class="bi bi-trash"></i> Delete
+                                        </button>
+                                    </div>
+                                    
+                                    <!-- Delete Medication Modal -->
+                                    <div class="modal fade" id="deleteMedicationModal<?= $med['id'] ?>" tabindex="-1" aria-labelledby="deleteMedicationModalLabel<?= $med['id'] ?>" aria-hidden="true">
+                                        <div class="modal-dialog">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title" id="deleteMedicationModalLabel<?= $med['id'] ?>">Confirm Delete</h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    <p>Are you sure you want to delete this medication record?</p>
+                                                    <ul>
+                                                        <li><strong>Date:</strong> <?= date('M j, Y', strtotime($med['date'])) ?></li>
+                                                        <li><strong>Type:</strong> <?= htmlspecialchars($med['type']) ?></li>
+                                                        <li><strong>Amount:</strong> <?= htmlspecialchars($med['amount']) ?></li>
+                                                    </ul>
+                                                    <p class="text-danger">This action cannot be undone.</p>
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                    <a href="animal_edit.php?id=<?= $id ?>&delete_medication=<?= $med['id'] ?>" class="btn btn-danger">Delete</a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <?php endif; ?>
                 
-                <!-- Sale Information -->
-                <div class="col-md-6">
-                    <h4>Sale Information</h4>
-                    
-                    <div class="mb-3 status-dependent" data-status="Sold">
-                        <label for="date_sold" class="form-label">Date Sold</label>
-                        <input type="date" id="date_sold" name="date_sold" class="form-control" 
-                               value="<?= htmlspecialchars($animal['date_sold']) ?>">
+                <?php if ($edit_medication): ?>
+                <div class="card mt-4">
+                    <div class="card-header bg-primary text-white">
+                        <h4 class="mb-0">Edit Medication Entry</h4>
                     </div>
-                    
-                    <div class="mb-3 status-dependent" data-status="Sold,For Sale">
-                        <label for="sell_price" class="form-label">Sale Price</label>
-                        <div class="input-group">
-                            <span class="input-group-text">$</span>
-                            <input type="text" id="sell_price" name="sell_price" class="form-control" 
-                                   value="<?= htmlspecialchars($animal['sell_price']) ?>">
+                    <div class="card-body">
+                        <form action="animal_edit.php?id=<?= $id ?>#medications" method="post">
+                            <input type="hidden" name="update_medication" value="1">
+                            <input type="hidden" name="med_id" value="<?= $edit_medication['id'] ?>">
+                            
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label for="med_date" class="form-label">Date *</label>
+                                    <input type="date" id="med_date" name="med_date" class="form-control" 
+                                           value="<?= htmlspecialchars($edit_medication['date']) ?>" required>
+                                </div>
+                                
+                                <div class="col-md-4 mb-3">
+                                    <label for="med_type" class="form-label">Type *</label>
+                                    <input type="text" id="med_type" name="med_type" class="form-control" 
+                                           value="<?= htmlspecialchars($edit_medication['type']) ?>" required>
+                                </div>
+                                
+                                <div class="col-md-4 mb-3">
+                                    <label for="med_amount" class="form-label">Amount *</label>
+                                    <input type="text" id="med_amount" name="med_amount" class="form-control" 
+                                           value="<?= htmlspecialchars($edit_medication['amount']) ?>" required>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="med_notes" class="form-label">Notes</label>
+                                <textarea id="med_notes" name="med_notes" class="form-control" rows="3"><?= htmlspecialchars($edit_medication['notes']) ?></textarea>
+                            </div>
+                            
+                            <div class="text-center">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-save"></i> Update Medication
+                                </button>
+                                <a href="animal_edit.php?id=<?= $id ?>#medications" class="btn btn-secondary ms-2">
+                                    <i class="bi bi-x-circle"></i> Cancel
+                                </a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+        
+        <!-- Add Medication Modal -->
+        <div class="modal fade" id="addMedicationModal" tabindex="-1" aria-labelledby="addMedicationModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="addMedicationModalLabel">Add Medication Entry</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <form action="animal_edit.php?id=<?= $id ?>#medications" method="post">
+                        <input type="hidden" name="add_medication" value="1">
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label for="med_date" class="form-label">Date *</label>
+                                <input type="date" id="med_date" name="med_date" class="form-control" 
+                                       value="<?= date('Y-m-d') ?>" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="med_type" class="form-label">Type *</label>
+                                <input type="text" id="med_type" name="med_type" class="form-control" required
+                                       placeholder="e.g., Vaccine, Antibiotic, Wormer">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="med_amount" class="form-label">Amount *</label>
+                                <input type="text" id="med_amount" name="med_amount" class="form-control" required
+                                       placeholder="e.g., 10ml, 2 tablets, 1cc">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="med_notes" class="form-label">Notes</label>
+                                <textarea id="med_notes" name="med_notes" class="form-control" rows="3"
+                                          placeholder="Optional additional details"></textarea>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Add Medication</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Notes Tab -->
+    <div class="tab-pane fade" id="notes" role="tabpanel" aria-labelledby="notes-tab">
+        <div class="card shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="card-title mb-0">Notes</h3>
+                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addNoteModal">
+                    <i class="bi bi-plus-circle"></i> Add Note
+                </button>
+            </div>
+            <div class="card-body">
+                <?php if (empty($notes)): ?>
+                <div class="alert alert-info">
+                    <p>No notes found for this animal. Click the "Add Note" button to add a note entry.</p>
+                </div>
+                <?php else: ?>
+                <div class="accordion" id="notesAccordion">
+                    <?php foreach ($notes as $index => $note): ?>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="noteHeading<?= $note['id'] ?>">
+                            <button class="accordion-button <?= $index > 0 ? 'collapsed' : '' ?>" type="button" data-bs-toggle="collapse" 
+                                    data-bs-target="#noteCollapse<?= $note['id'] ?>" aria-expanded="<?= $index === 0 ? 'true' : 'false' ?>" 
+                                    aria-controls="noteCollapse<?= $note['id'] ?>">
+                                <strong><?= htmlspecialchars($note['title']) ?></strong> &nbsp;-&nbsp; <?= date('M j, Y', strtotime($note['date'])) ?>
+                            </button>
+                        </h2>
+                        <div id="noteCollapse<?= $note['id'] ?>" class="accordion-collapse collapse <?= $index === 0 ? 'show' : '' ?>" 
+                             aria-labelledby="noteHeading<?= $note['id'] ?>" data-bs-parent="#notesAccordion">
+                            <div class="accordion-body">
+                                <div class="mb-3">
+                                    <?= nl2br(htmlspecialchars($note['content'])) ?>
+                                </div>
+                                <div class="d-flex justify-content-end">
+                                    <a href="animal_edit.php?id=<?= $id ?>&edit_note=<?= $note['id'] ?>#notes" class="btn btn-sm btn-outline-primary me-2">
+                                        <i class="bi bi-pencil"></i> Edit
+                                    </a>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteNoteModal<?= $note['id'] ?>">
+                                        <i class="bi bi-trash"></i> Delete
+                                    </button>
+                                </div>
+                                
+                                <!-- Delete Note Modal -->
+                                <div class="modal fade" id="deleteNoteModal<?= $note['id'] ?>" tabindex="-1" aria-labelledby="deleteNoteModalLabel<?= $note['id'] ?>" aria-hidden="true">
+                                    <div class="modal-dialog">
+                                        <div class="modal-content">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title" id="deleteNoteModalLabel<?= $note['id'] ?>">Confirm Delete</h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <p>Are you sure you want to delete this note?</p>
+                                                <p><strong>Title:</strong> <?= htmlspecialchars($note['title']) ?></p>
+                                                <p><strong>Date:</strong> <?= date('M j, Y', strtotime($note['date'])) ?></p>
+                                                <p class="text-danger">This action cannot be undone.</p>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                <a href="animal_edit.php?id=<?= $id ?>&delete_note=<?= $note['id'] ?>" class="btn btn-danger">Delete</a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    
-                    <div class="mb-3 status-dependent" data-status="Sold">
-                        <label for="sell_info" class="form-label">Buyer Information</label>
-                        <input type="text" id="sell_info" name="sell_info" class="form-control" 
-                               value="<?= htmlspecialchars($animal['sell_info']) ?>">
-                    </div>
+                    <?php endforeach; ?>
                 </div>
-            </div>
-            
-            <div class="row mt-4">
-                <!-- Notes and Medications -->
-                <div class="col-md-6">
-                    <h4>Notes</h4>
-                    <div class="mb-3">
-                        <textarea id="notes" name="notes" class="form-control" rows="5"><?= htmlspecialchars($animal['notes']) ?></textarea>
-                    </div>
-                </div>
+                <?php endif; ?>
                 
-                <div class="col-md-6">
-                    <h4>Medication History</h4>
-                    <div class="mb-3">
-                        <textarea id="meds" name="meds" class="form-control" rows="5"><?= htmlspecialchars($animal['meds']) ?></textarea>
+                <?php if ($edit_note): ?>
+                <div class="card mt-4">
+                    <div class="card-header bg-primary text-white">
+                        <h4 class="mb-0">Edit Note</h4>
+                    </div>
+                    <div class="card-body">
+                        <form action="animal_edit.php?id=<?= $id ?>#notes" method="post">
+                            <input type="hidden" name="update_note" value="1">
+                            <input type="hidden" name="note_id" value="<?= $edit_note['id'] ?>">
+                            
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label for="note_date" class="form-label">Date *</label>
+                                    <input type="date" id="note_date" name="note_date" class="form-control" 
+                                           value="<?= htmlspecialchars($edit_note['date']) ?>" required>
+                                </div>
+                                
+                                <div class="col-md-8 mb-3">
+                                    <label for="note_title" class="form-label">Title *</label>
+                                    <input type="text" id="note_title" name="note_title" class="form-control" 
+                                           value="<?= htmlspecialchars($edit_note['title']) ?>" required>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="note_content" class="form-label">Content *</label>
+                                <textarea id="note_content" name="note_content" class="form-control" rows="5" required><?= htmlspecialchars($edit_note['content']) ?></textarea>
+                            </div>
+                            
+                            <div class="text-center">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-save"></i> Update Note
+                                </button>
+                                <a href="animal_edit.php?id=<?= $id ?>#notes" class="btn btn-secondary ms-2">
+                                    <i class="bi bi-x-circle"></i> Cancel
+                                </a>
+                            </div>
+                        </form>
                     </div>
                 </div>
+                <?php endif; ?>
             </div>
-            
-            <div class="row mt-4">
-                <div class="col-12 text-center">
-                    <button type="submit" class="btn btn-primary btn-lg">
-                        <i class="bi bi-save"></i> Save Changes
-                    </button>
-                    <a href="animal_view.php?id=<?= $id ?>" class="btn btn-secondary btn-lg ms-2">
-                        <i class="bi bi-x-circle"></i> Cancel
-                    </a>
+        </div>
+        
+        <!-- Add Note Modal -->
+        <div class="modal fade" id="addNoteModal" tabindex="-1" aria-labelledby="addNoteModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="addNoteModalLabel">Add Note</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <form action="animal_edit.php?id=<?= $id ?>#notes" method="post">
+                        <input type="hidden" name="add_note" value="1">
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label for="note_date" class="form-label">Date *</label>
+                                <input type="date" id="note_date" name="note_date" class="form-control" 
+                                       value="<?= date('Y-m-d') ?>" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="note_title" class="form-label">Title *</label>
+                                <input type="text" id="note_title" name="note_title" class="form-control" required
+                                       placeholder="Brief description of this note">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="note_content" class="form-label">Content *</label>
+                                <textarea id="note_content" name="note_content" class="form-control" rows="5" required
+                                          placeholder="Enter detailed notes here..."></textarea>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Add Note</button>
+                        </div>
+                    </form>
                 </div>
             </div>
-        </form>
+        </div>
     </div>
 </div>
 
 <!-- Fixed Script for Status-Dependent Fields -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Initialize popovers
+    var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'))
+    var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
+        return new bootstrap.Popover(popoverTriggerEl, {
+            html: true,
+            trigger: 'click',
+            placement: 'top'
+        });
+    });
+    
     // Show/hide fields based on status selection
     const statusSelect = document.getElementById('status');
     const statusDependentFields = document.querySelectorAll('.status-dependent');
@@ -572,8 +1214,18 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     }
+    
+    // Auto-activate tab based on URL hash
+    const hash = window.location.hash;
+    if (hash) {
+        const triggerEl = document.querySelector(`button[data-bs-target="${hash}"]`);
+        if (triggerEl) {
+            new bootstrap.Tab(triggerEl).show();
+        }
+    }
 });
 </script>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Filter Dam and Sire options based on animal type
