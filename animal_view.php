@@ -204,44 +204,94 @@ try {
                         </div>
                         <?php endif; ?>
 
-                        <!-- Parent Information (if available) -->
-                        <div class="mb-4">
-                            <h4>Lineage</h4>
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="card mb-3">
-                                        <div class="card-header">Dam (Mother)</div>
-                                        <div class="card-body">
-                                            <?php if (!empty($animal['dam_id'])): ?>
-                                            <p>
-                                                <a href="animal_view.php?id=<?= $animal['dam_id'] ?>">
-                                                    View Dam
-                                                </a>
-                                            </p>
-                                            <?php else: ?>
-                                            <p class="text-muted">No dam information available</p>
-                                            <?php endif; ?>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="card mb-3">
-                                        <div class="card-header">Sire (Father)</div>
-                                        <div class="card-body">
-                                            <?php if (!empty($animal['sire_id'])): ?>
-                                            <p>
-                                                <a href="animal_view.php?id=<?= $animal['sire_id'] ?>">
-                                                    View Sire
-                                                </a>
-                                            </p>
-                                            <?php else: ?>
-                                            <p class="text-muted">No sire information available</p>
-                                            <?php endif; ?>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+<!-- Parent Information (if available) -->
+<div class="mb-4">
+    <h4>Lineage</h4>
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card mb-3">
+                <div class="card-header">Dam (Mother)</div>
+                <div class="card-body">
+                    <?php if (!empty($animal['dam_id'])): 
+                        // Fetch dam details
+                        $damStmt = $db->prepare("
+                            SELECT id, name, number 
+                            FROM animals 
+                            WHERE id = :dam_id AND user_id = :user_id
+                        ");
+                        $damStmt->bindParam(':dam_id', $animal['dam_id'], PDO::PARAM_INT);
+                        $damStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
+                        $damStmt->execute();
+                        $dam = $damStmt->fetch();
+                        
+                        if ($dam):
+                    ?>
+                    <p>
+                        <a href="animal_view.php?id=<?= $dam['id'] ?>">
+                            <?= htmlspecialchars($dam['name']) ?> (<?= htmlspecialchars($dam['number']) ?>)
+                        </a>
+                    </p>
+                    <div class="mt-2">
+                        <a href="report_lineage.php?id=<?= $dam['id'] ?>" class="btn btn-sm btn-info">
+                            <i class="bi bi-diagram-3"></i> View Lineage
+                        </a>
+                    </div>
+                    <?php else: ?>
+                    <p>
+                        <a href="animal_view.php?id=<?= $animal['dam_id'] ?>">
+                            View Dam
+                        </a>
+                    </p>
+                    <?php endif; ?>
+                    <?php else: ?>
+                    <p class="text-muted">No dam information available</p>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card mb-3">
+                <div class="card-header">Sire (Father)</div>
+                <div class="card-body">
+                    <?php if (!empty($animal['sire_id'])): 
+                        // Fetch sire details
+                        $sireStmt = $db->prepare("
+                            SELECT id, name, number 
+                            FROM animals 
+                            WHERE id = :sire_id AND user_id = :user_id
+                        ");
+                        $sireStmt->bindParam(':sire_id', $animal['sire_id'], PDO::PARAM_INT);
+                        $sireStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
+                        $sireStmt->execute();
+                        $sire = $sireStmt->fetch();
+                        
+                        if ($sire):
+                    ?>
+                    <p>
+                        <a href="animal_view.php?id=<?= $sire['id'] ?>">
+                            <?= htmlspecialchars($sire['name']) ?> (<?= htmlspecialchars($sire['number']) ?>)
+                        </a>
+                    </p>
+                    <div class="mt-2">
+                        <a href="report_lineage.php?id=<?= $sire['id'] ?>" class="btn btn-sm btn-info">
+                            <i class="bi bi-diagram-3"></i> View Lineage
+                        </a>
+                    </div>
+                    <?php else: ?>
+                    <p>
+                        <a href="animal_view.php?id=<?= $animal['sire_id'] ?>">
+                            View Sire
+                        </a>
+                    </p>
+                    <?php endif; ?>
+                    <?php else: ?>
+                    <p class="text-muted">No sire information available</p>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
                     </div>
                 </div>
             </div>
