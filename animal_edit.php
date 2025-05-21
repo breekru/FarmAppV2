@@ -583,9 +583,10 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // Add matching Dam options
-        damOptions.forEach(function(option) {
-            if (option.value === "" || option.dataset.type === selectedType) {
+        // Add matching Dam options (skip the first "None Selected" option)
+        damOptions.forEach(function(option, index) {
+            // Skip the first option (None Selected) since we're keeping it
+            if (index > 0 && option.dataset.type === selectedType) {
                 const newOption = option.cloneNode(true);
                 if (option.selected) {
                     newOption.selected = true;
@@ -594,9 +595,10 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
         
-        // Add matching Sire options
-        sireOptions.forEach(function(option) {
-            if (option.value === "" || option.dataset.type === selectedType) {
+        // Add matching Sire options (skip the first "None Selected" option)
+        sireOptions.forEach(function(option, index) {
+            // Skip the first option (None Selected) since we're keeping it
+            if (index > 0 && option.dataset.type === selectedType) {
                 const newOption = option.cloneNode(true);
                 if (option.selected) {
                     newOption.selected = true;
@@ -610,8 +612,10 @@ document.addEventListener('DOMContentLoaded', function() {
     if (typeSelect) {
         typeSelect.addEventListener('change', filterParentOptions);
         
-        // Initial filter on page load
-        filterParentOptions();
+        // Initial filter on page load if type is pre-selected
+        if (typeSelect.value) {
+            filterParentOptions();
+        }
     }
 });
 </script>
