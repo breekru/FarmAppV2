@@ -1,9 +1,9 @@
 <?php
 /**
- * Animal Add Page - FIXED
+ * Animal Add Page - ENHANCED VERSION
  * 
  * This page allows users to add a new animal to their inventory.
- * With improved image upload handling.
+ * Enhanced with structured medication and notes entries.
  */
 
 // Enable error reporting for debugging
@@ -39,6 +39,7 @@ $db = getDbConnection();
 // Process form submission
 $errors = [];
 $success = false;
+$new_animal_id = null;
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // Get form data and sanitize
@@ -61,12 +62,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $date_sold = filter_input(INPUT_POST, 'date_sold', FILTER_SANITIZE_FULL_SPECIAL_CHARS) ?: null;
     $sell_price = filter_input(INPUT_POST, 'sell_price', FILTER_SANITIZE_FULL_SPECIAL_CHARS) ?: null;
     $sell_info = filter_input(INPUT_POST, 'sell_info', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
-    
-    // FIX: Better handling for notes and medication fields
-    $notes = isset($_POST['notes']) ? trim($_POST['notes']) : '';
-    $meds = isset($_POST['meds']) ? trim($_POST['meds']) : '';
-    
     $for_sale = filter_input(INPUT_POST, 'for_sale', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+    
+    // Check for initial medication and notes entries
+    $initial_med_date = isset($_POST['initial_med_date']) ? $_POST['initial_med_date'] : date('Y-m-d');
+    $initial_med_type = isset($_POST['initial_med_type']) ? $_POST['initial_med_type'] : '';
+    $initial_med_amount = isset($_POST['initial_med_amount']) ? $_POST['initial_med_amount'] : '';
+    $initial_med_notes = isset($_POST['initial_med_notes']) ? $_POST['initial_med_notes'] : '';
+    
+    $initial_note_date = isset($_POST['initial_note_date']) ? $_POST['initial_note_date'] : date('Y-m-d');
+    $initial_note_title = isset($_POST['initial_note_title']) ? $_POST['initial_note_title'] : '';
+    $initial_note_content = isset($_POST['initial_note_content']) ? $_POST['initial_note_content'] : '';
+    
+    $add_initial_medication = !empty($initial_med_type) && !empty($initial_med_amount);
+    $add_initial_note = !empty($initial_note_title) && !empty($initial_note_content);
     
     // Validate required fields
     if (empty($type)) {
@@ -151,9 +160,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         }
     }
     
-    // If no errors, add the animal
+    // If no errors, add the animal and optional initial notes/medications
     if (empty($errors)) {
         try {
+            // Start transaction
+            $db->beginTransaction();
+            
             // Prepare the SQL statement
             $insertQuery = "
                 INSERT INTO animals (
@@ -161,14 +173,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     dam_id, sire_id, status, reg_num, reg_name, 
                     date_purchased, purch_cost, purch_info, 
                     date_sold, sell_price, sell_info, 
-                    notes, meds, for_sale, image, 
+                    for_sale, image, 
                     user_id, created_at, updated_at
                 ) VALUES (
                     :type, :breed, :number, :name, :gender, :color, :dob, :dod, 
                     :dam_id, :sire_id, :status, :reg_num, :reg_name, 
                     :date_purchased, :purch_cost, :purch_info, 
                     :date_sold, :sell_price, :sell_info, 
-                    :notes, :meds, :for_sale, :image, 
+                    :for_sale, :image, 
                     :user_id, NOW(), NOW()
                 )
             ";
@@ -195,30 +207,65 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $insertStmt->bindParam(':date_sold', $date_sold);
             $insertStmt->bindParam(':sell_price', $sell_price);
             $insertStmt->bindParam(':sell_info', $sell_info);
-            
-            // FIX: Correctly bind notes and meds as PDO::PARAM_STR
-            $insertStmt->bindParam(':notes', $notes, PDO::PARAM_STR);
-            $insertStmt->bindParam(':meds', $meds, PDO::PARAM_STR);
-            
             $insertStmt->bindParam(':for_sale', $for_sale);
             $insertStmt->bindParam(':image', $fileName);
             $insertStmt->bindParam(':user_id', $current_user);
             
-            // FIX: Better error handling for execute
+            // Execute animal insert
             if (!$insertStmt->execute()) {
-                $errors[] = "Database error: " . implode(", ", $insertStmt->errorInfo());
-                error_log("Insert animal error: " . print_r($insertStmt->errorInfo(), true));
-            } else {
-                $animal_id = $db->lastInsertId();
-                $success = true;
-                $_SESSION['alert_message'] = "Animal added successfully!";
-                $_SESSION['alert_type'] = "success";
-                
-                // Redirect to the animal view page
-                header("location: animal_view.php?id=" . $animal_id);
-                exit;
+                throw new Exception("Database error: " . implode(", ", $insertStmt->errorInfo()));
             }
+            
+            // Get the new animal ID
+            $new_animal_id = $db->lastInsertId();
+            
+            // Add initial medication if provided
+            if ($add_initial_medication) {
+                $medStmt = $db->prepare("
+                    INSERT INTO animal_medications (animal_id, date, type, amount, notes)
+                    VALUES (:animal_id, :date, :type, :amount, :notes)
+                ");
+                $medStmt->bindParam(':animal_id', $new_animal_id, PDO::PARAM_INT);
+                $medStmt->bindParam(':date', $initial_med_date, PDO::PARAM_STR);
+                $medStmt->bindParam(':type', $initial_med_type, PDO::PARAM_STR);
+                $medStmt->bindParam(':amount', $initial_med_amount, PDO::PARAM_STR);
+                $medStmt->bindParam(':notes', $initial_med_notes, PDO::PARAM_STR);
+                
+                if (!$medStmt->execute()) {
+                    throw new Exception("Error adding medication entry: " . implode(", ", $medStmt->errorInfo()));
+                }
+            }
+            
+            // Add initial note if provided
+            if ($add_initial_note) {
+                $noteStmt = $db->prepare("
+                    INSERT INTO animal_notes (animal_id, date, title, content)
+                    VALUES (:animal_id, :date, :title, :content)
+                ");
+                $noteStmt->bindParam(':animal_id', $new_animal_id, PDO::PARAM_INT);
+                $noteStmt->bindParam(':date', $initial_note_date, PDO::PARAM_STR);
+                $noteStmt->bindParam(':title', $initial_note_title, PDO::PARAM_STR);
+                $noteStmt->bindParam(':content', $initial_note_content, PDO::PARAM_STR);
+                
+                if (!$noteStmt->execute()) {
+                    throw new Exception("Error adding note entry: " . implode(", ", $noteStmt->errorInfo()));
+                }
+            }
+            
+            // Commit transaction
+            $db->commit();
+            
+            $success = true;
+            $_SESSION['alert_message'] = "Animal added successfully!";
+            $_SESSION['alert_type'] = "success";
+            
+            // Redirect to the animal view page
+            header("location: animal_view.php?id=" . $new_animal_id);
+            exit;
         } catch (Exception $e) {
+            // Rollback transaction on error
+            $db->rollBack();
+            
             error_log('Animal Add Error: ' . $e->getMessage());
             $errors[] = "Database error: " . $e->getMessage();
             
@@ -238,83 +285,90 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 // Get parent options for selection
 try {
     // Get all possible dams (female animals) for parent selection dropdown
-$damStmt = $db->prepare("
-SELECT id, name, number, type
-FROM animals 
-WHERE user_id = :user_id 
-AND gender = 'Female' 
-ORDER BY name ASC
-");
-$damStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
-$damStmt->execute();
-$dams = $damStmt->fetchAll();
+    $damStmt = $db->prepare("
+        SELECT id, name, number, type
+        FROM animals 
+        WHERE user_id = :user_id 
+        AND gender = 'Female' 
+        ORDER BY name ASC
+    ");
+    $damStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
+    $damStmt->execute();
+    $dams = $damStmt->fetchAll();
 
-// Get all possible sires (male animals) for parent selection dropdown
-$sireStmt = $db->prepare("
-SELECT id, name, number, type
-FROM animals 
-WHERE user_id = :user_id 
-AND gender = 'Male' 
-ORDER BY name ASC
-");
-$sireStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
-$sireStmt->execute();
-$sires = $sireStmt->fetchAll();
+    // Get all possible sires (male animals) for parent selection dropdown
+    $sireStmt = $db->prepare("
+        SELECT id, name, number, type
+        FROM animals 
+        WHERE user_id = :user_id 
+        AND gender = 'Male' 
+        ORDER BY name ASC
+    ");
+    $sireStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
+    $sireStmt->execute();
+    $sires = $sireStmt->fetchAll();
 } catch (Exception $e) {
     error_log('Animal Add Error: ' . $e->getMessage());
     $errors[] = "Error loading parent options: " . $e->getMessage();
 }
+
+// Include header
+include_once 'includes/header.php';
 ?>
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $page_title ?> - FarmApp</title>
-    
-    <!-- Bootstrap 5 CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    
-    <!-- Bootstrap Icons -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
-    
-    <!-- Custom CSS -->
-    <link rel="stylesheet" href="assets/css/styles.css">
-</head>
-<body>
-    <div class="container py-4">
-        <div class="row mb-3">
-            <div class="col-md-6">
-                <a href="index.php" class="btn btn-outline-secondary">
-                    <i class="bi bi-arrow-left"></i> Back to Dashboard
-                </a>
-            </div>
-        </div>
-        
-        <h2 class="mb-4"><?= $page_header ?></h2>
+<div class="row mb-3">
+    <div class="col-md-6">
+        <a href="index.php" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Dashboard
+        </a>
+    </div>
+    <div class="col-md-6">
+        <h2><?= $page_header ?></h2>
         <p class="lead"><?= $page_subheader ?></p>
+    </div>
+</div>
 
-        <?php if (!empty($errors)): ?>
-        <div class="alert alert-danger">
-            <h5><i class="bi bi-exclamation-triangle-fill me-2"></i> Please fix the following errors:</h5>
-            <ul class="mb-0">
-                <?php foreach ($errors as $error): ?>
-                <li><?= htmlspecialchars($error) ?></li>
-                <?php endforeach; ?>
-            </ul>
-        </div>
-        <?php endif; ?>
+<?php if (!empty($errors)): ?>
+<div class="alert alert-danger">
+    <h5><i class="bi bi-exclamation-triangle-fill me-2"></i> Please fix the following errors:</h5>
+    <ul class="mb-0">
+        <?php foreach ($errors as $error): ?>
+        <li><?= htmlspecialchars($error) ?></li>
+        <?php endforeach; ?>
+    </ul>
+</div>
+<?php endif; ?>
 
-        <div class="card shadow-sm">
-            <div class="card-body">
-                <form action="animal_add.php" method="post" enctype="multipart/form-data">
+<!-- Tabs Navigation -->
+<ul class="nav nav-tabs mb-4" id="animalTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="details-tab" data-bs-toggle="tab" data-bs-target="#details" type="button" role="tab" aria-controls="details" aria-selected="true">
+            <i class="bi bi-card-list"></i> Basic Information
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="additional-tab" data-bs-toggle="tab" data-bs-target="#additional" type="button" role="tab" aria-controls="additional" aria-selected="false">
+            <i class="bi bi-file-earmark-plus"></i> Additional Information
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="initial-entries-tab" data-bs-toggle="tab" data-bs-target="#initial-entries" type="button" role="tab" aria-controls="initial-entries" aria-selected="false">
+            <i class="bi bi-journal-medical"></i> Initial Entries
+        </button>
+    </li>
+</ul>
+
+<form action="animal_add.php" method="post" enctype="multipart/form-data" id="addAnimalForm">
+    <div class="tab-content" id="animalTabsContent">
+        <!-- Basic Information Tab -->
+        <div class="tab-pane fade show active" id="details" role="tabpanel" aria-labelledby="details-tab">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h3 class="card-title mb-0">Basic Information</h3>
+                </div>
+                <div class="card-body">
                     <div class="row">
-                        <!-- Form content remains the same -->
-                        <!-- Basic Information -->
                         <div class="col-md-6">
-                            <h4>Basic Information</h4>
-                            
                             <div class="mb-3">
                                 <label for="type" class="form-label">Type *</label>
                                 <select id="type" name="type" class="form-select" required>
@@ -341,12 +395,9 @@ $sires = $sireStmt->fetchAll();
                                 <label for="name" class="form-label">Name *</label>
                                 <input type="text" id="name" name="name" class="form-control" required>
                             </div>
-                            
-                            <div class="mb-3">
-                                <label for="color" class="form-label">Color Description</label>
-                                <input type="text" id="color" name="color" class="form-control">
-                            </div>
-                            
+                        </div>
+                        
+                        <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="gender" class="form-label">Gender *</label>
                                 <select id="gender" name="gender" class="form-select" required>
@@ -354,6 +405,11 @@ $sires = $sireStmt->fetchAll();
                                     <option value="Male">Male</option>
                                     <option value="Female">Female</option>
                                 </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="color" class="form-label">Color Description</label>
+                                <input type="text" id="color" name="color" class="form-control">
                             </div>
                             
                             <div class="mb-3">
@@ -376,45 +432,81 @@ $sires = $sireStmt->fetchAll();
                                 </select>
                             </div>
                         </div>
-                        
-                        <!-- Dates and Lineage Information -->
+                    </div>
+                    
+                    <div class="row">
                         <div class="col-md-6">
-                            <h4>Dates & Lineage</h4>
-                            
                             <div class="mb-3">
                                 <label for="dob" class="form-label">Date of Birth</label>
                                 <input type="date" id="dob" name="dob" class="form-control">
                             </div>
-                            
-                            <div class="mb-3 status-dependent" data-status="Dead,Harvested">
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="mb-3 status-dependent" data-status="Dead,Harvested" style="display: none;">
                                 <label for="dod" class="form-label">Date of Death/Dispatch</label>
                                 <input type="date" id="dod" name="dod" class="form-control">
                             </div>
-                            
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
                             <div class="mb-3">
-    <label for="dam_id" class="form-label">Dam (Mother)</label>
-    <select id="dam_id" name="dam_id" class="form-select">
-        <option value="">None Selected</option>
-        <?php foreach ($dams as $dam): ?>
-        <option value="<?= $dam['id'] ?>" data-type="<?= htmlspecialchars($dam['type']) ?>">
-            <?= htmlspecialchars($dam['name']) ?> (<?= htmlspecialchars($dam['number']) ?>)
-        </option>
-        <?php endforeach; ?>
-    </select>
-</div>
+                                <label for="dam_id" class="form-label">Dam (Mother)</label>
+                                <select id="dam_id" name="dam_id" class="form-select">
+                                    <option value="">None Selected</option>
+                                    <?php foreach ($dams as $dam): ?>
+                                    <option value="<?= $dam['id'] ?>" data-type="<?= htmlspecialchars($dam['type']) ?>">
+                                        <?= htmlspecialchars($dam['name']) ?> (<?= htmlspecialchars($dam['number']) ?>)
+                                    </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="sire_id" class="form-label">Sire (Father)</label>
+                                <select id="sire_id" name="sire_id" class="form-select">
+                                    <option value="">None Selected</option>
+                                    <?php foreach ($sires as $sire): ?>
+                                    <option value="<?= $sire['id'] ?>" data-type="<?= htmlspecialchars($sire['type']) ?>">
+                                        <?= htmlspecialchars($sire['name']) ?> (<?= htmlspecialchars($sire['number']) ?>)
+                                    </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <div class="d-flex justify-content-between">
+                                <button type="button" class="btn btn-secondary" onclick="window.location.href='index.php'">
+                                    <i class="bi bi-x-circle"></i> Cancel
+                                </button>
+                                <button type="button" class="btn btn-primary next-tab" data-next-tab="additional-tab">
+                                    Next: Additional Information <i class="bi bi-arrow-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-<div class="mb-3">
-    <label for="sire_id" class="form-label">Sire (Father)</label>
-    <select id="sire_id" name="sire_id" class="form-select">
-        <option value="">None Selected</option>
-        <?php foreach ($sires as $sire): ?>
-        <option value="<?= $sire['id'] ?>" data-type="<?= htmlspecialchars($sire['type']) ?>">
-            <?= htmlspecialchars($sire['name']) ?> (<?= htmlspecialchars($sire['number']) ?>)
-        </option>
-        <?php endforeach; ?>
-    </select>
-</div>                            
-                            <h4 class="mt-4">Registration</h4>
+        <!-- Additional Information Tab -->
+        <div class="tab-pane fade" id="additional" role="tabpanel" aria-labelledby="additional-tab">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h3 class="card-title mb-0">Additional Information</h3>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <!-- Registration Information -->
+                        <div class="col-md-6">
+                            <h4>Registration</h4>
                             
                             <div class="mb-3">
                                 <label for="reg_num" class="form-label">Registration Number</label>
@@ -436,10 +528,8 @@ $sires = $sireStmt->fetchAll();
                                 <div id="imagePreview" style="display: none;"></div>
                             </div>
                         </div>
-                    </div>
-                    
-                    <div class="row mt-4">
-                        <!-- Purchase Information -->
+                        
+                        <!-- Purchase/Sale Information -->
                         <div class="col-md-6">
                             <h4>Purchase Information</h4>
                             
@@ -460,18 +550,15 @@ $sires = $sireStmt->fetchAll();
                                 <label for="purch_info" class="form-label">Seller Information</label>
                                 <input type="text" id="purch_info" name="purch_info" class="form-control">
                             </div>
-                        </div>
-                        
-                        <!-- Sale Information -->
-                        <div class="col-md-6">
-                            <h4>Sale Information</h4>
                             
-                            <div class="mb-3 status-dependent" data-status="Sold">
+                            <h4 class="mt-4">Sale Information</h4>
+                            
+                            <div class="mb-3 status-dependent" data-status="Sold" style="display: none;">
                                 <label for="date_sold" class="form-label">Date Sold</label>
                                 <input type="date" id="date_sold" name="date_sold" class="form-control">
                             </div>
                             
-                            <div class="mb-3 status-dependent" data-status="Sold,For Sale">
+                            <div class="mb-3 status-dependent" data-status="Sold,For Sale" style="display: none;">
                                 <label for="sell_price" class="form-label">Sale Price</label>
                                 <div class="input-group">
                                     <span class="input-group-text">$</span>
@@ -479,7 +566,7 @@ $sires = $sireStmt->fetchAll();
                                 </div>
                             </div>
                             
-                            <div class="mb-3 status-dependent" data-status="Sold">
+                            <div class="mb-3 status-dependent" data-status="Sold" style="display: none;">
                                 <label for="sell_info" class="form-label">Buyer Information</label>
                                 <input type="text" id="sell_info" name="sell_info" class="form-control">
                             </div>
@@ -487,118 +574,196 @@ $sires = $sireStmt->fetchAll();
                     </div>
                     
                     <div class="row mt-4">
-                        <!-- Notes and Medications -->
+                        <div class="col-12">
+                            <div class="d-flex justify-content-between">
+                                <button type="button" class="btn btn-secondary prev-tab" data-prev-tab="details-tab">
+                                    <i class="bi bi-arrow-left"></i> Previous
+                                </button>
+                                <button type="button" class="btn btn-primary next-tab" data-next-tab="initial-entries-tab">
+                                    Next: Initial Entries <i class="bi bi-arrow-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Initial Entries Tab -->
+        <div class="tab-pane fade" id="initial-entries" role="tabpanel" aria-labelledby="initial-entries-tab">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h3 class="card-title mb-0">Initial Entries (Optional)</h3>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <!-- Initial Medication Entry -->
                         <div class="col-md-6">
-                            <h4>Notes</h4>
+                            <h4>Initial Medication Entry</h4>
+                            <p class="text-muted">Add an initial medication record for this animal (optional)</p>
+                            
                             <div class="mb-3">
-                                <textarea id="notes" name="notes" class="form-control" rows="5"></textarea>
+                                <label for="initial_med_date" class="form-label">Date</label>
+                                <input type="date" id="initial_med_date" name="initial_med_date" class="form-control" 
+                                       value="<?= date('Y-m-d') ?>">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="initial_med_type" class="form-label">Type</label>
+                                <input type="text" id="initial_med_type" name="initial_med_type" class="form-control"
+                                       placeholder="e.g., Vaccine, Antibiotic, Wormer">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="initial_med_amount" class="form-label">Amount</label>
+                                <input type="text" id="initial_med_amount" name="initial_med_amount" class="form-control"
+                                       placeholder="e.g., 10ml, 2 tablets, 1cc">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="initial_med_notes" class="form-label">Notes</label>
+                                <textarea id="initial_med_notes" name="initial_med_notes" class="form-control" rows="3"
+                                          placeholder="Optional additional details"></textarea>
                             </div>
                         </div>
                         
+                        <!-- Initial Note Entry -->
                         <div class="col-md-6">
-                            <h4>Medication History</h4>
+                            <h4>Initial Note Entry</h4>
+                            <p class="text-muted">Add an initial note for this animal (optional)</p>
+                            
                             <div class="mb-3">
-                                <textarea id="meds" name="meds" class="form-control" rows="5"></textarea>
+                                <label for="initial_note_date" class="form-label">Date</label>
+                                <input type="date" id="initial_note_date" name="initial_note_date" class="form-control" 
+                                       value="<?= date('Y-m-d') ?>">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="initial_note_title" class="form-label">Title</label>
+                                <input type="text" id="initial_note_title" name="initial_note_title" class="form-control"
+                                       placeholder="Brief description of this note">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="initial_note_content" class="form-label">Content</label>
+                                <textarea id="initial_note_content" name="initial_note_content" class="form-control" rows="5"
+                                          placeholder="Enter detailed notes here..."></textarea>
                             </div>
                         </div>
                     </div>
                     
                     <div class="row mt-4">
-                        <div class="col-12 text-center">
-                            <button type="submit" class="btn btn-primary btn-lg">
-                                <i class="bi bi-plus-circle"></i> Add Animal
-                            </button>
-                            <a href="index.php" class="btn btn-secondary btn-lg ms-2">
-                                <i class="bi bi-x-circle"></i> Cancel
-                            </a>
+                        <div class="col-12">
+                            <div class="d-flex justify-content-between">
+                                <button type="button" class="btn btn-secondary prev-tab" data-prev-tab="additional-tab">
+                                    <i class="bi bi-arrow-left"></i> Previous
+                                </button>
+                                <button type="submit" class="btn btn-success btn-lg">
+                                    <i class="bi bi-plus-circle"></i> Add Animal
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </form>
+                </div>
             </div>
         </div>
     </div>
+</form>
 
-    <!-- Bootstrap Bundle with Popper -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    
-    <!-- Fixed Script for Status-Dependent Fields -->
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Show/hide fields based on status selection
-        const statusSelect = document.getElementById('status');
-        const statusDependentFields = document.querySelectorAll('.status-dependent');
-        
-        function updateFieldVisibility() {
-            const selectedStatus = statusSelect.value;
-            
-            statusDependentFields.forEach(field => {
-                const statusValues = field.getAttribute('data-status').split(',');
-                if (statusValues.includes(selectedStatus)) {
-                    field.style.display = 'block';
-                } else {
-                    field.style.display = 'none';
-                }
-            });
-            
-            // Update for_sale dropdown based on status
-            const forSaleSelect = document.getElementById('for_sale');
-            if (forSaleSelect) {
-                if (selectedStatus === 'For Sale') {
-                    forSaleSelect.value = 'Yes';
-                } else if (selectedStatus === 'Sold') {
-                    forSaleSelect.value = 'Has Been Sold';
-                } else if (forSaleSelect.value === 'Yes' && selectedStatus !== 'For Sale') {
-                    forSaleSelect.value = 'No';
-                }
-            }
-        }
-        
-        // Initial update
-        if (statusSelect) {
-            updateFieldVisibility();
-            
-            // Update on status change
-            statusSelect.addEventListener('change', updateFieldVisibility);
-            
-            // Dynamic behavior for the for-sale toggle
-            const forSaleSelect = document.getElementById('for_sale');
-            if (forSaleSelect) {
-                forSaleSelect.addEventListener('change', function() {
-                    if (this.value === 'Yes') {
-                        // If marked for sale, update status
-                        statusSelect.value = 'For Sale';
-                        updateFieldVisibility();
-                    }
-                });
-            }
-        }
-        
-        // Image preview
-        const imageInput = document.getElementById('image');
-        const imagePreview = document.getElementById('imagePreview');
-        
-        if (imageInput && imagePreview) {
-            imageInput.addEventListener('change', function() {
-                if (this.files && this.files[0]) {
-                    const reader = new FileReader();
-                    
-                    reader.onload = function(e) {
-                        imagePreview.innerHTML = `<img src="${e.target.result}" class="img-fluid img-thumbnail" style="max-height: 200px;">`;
-                        imagePreview.style.display = 'block';
-                    };
-                    
-                    reader.readAsDataURL(this.files[0]);
-                } else {
-                    imagePreview.innerHTML = '';
-                    imagePreview.style.display = 'none';
-                }
-            });
-        }
-    });
-    </script>
-
+<!-- JavaScript for Tab Navigation, Image Preview, etc. -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Tab navigation buttons
+    document.querySelectorAll('.next-tab').forEach(function(button) {
+        button.addEventListener('click', function() {
+            const nextTabId = this.getAttribute('data-next-tab');
+            const nextTab = document.getElementById(nextTabId);
+            if (nextTab) {
+                const tab = new bootstrap.Tab(nextTab);
+                tab.show();
+            }
+        });
+    });
+    
+    document.querySelectorAll('.prev-tab').forEach(function(button) {
+        button.addEventListener('click', function() {
+            const prevTabId = this.getAttribute('data-prev-tab');
+            const prevTab = document.getElementById(prevTabId);
+            if (prevTab) {
+                const tab = new bootstrap.Tab(prevTab);
+                tab.show();
+            }
+        });
+    });
+    
+    // Status-dependent field visibility
+    const statusSelect = document.getElementById('status');
+    const statusDependentFields = document.querySelectorAll('.status-dependent');
+    
+    function updateFieldVisibility() {
+        const selectedStatus = statusSelect.value;
+        
+        statusDependentFields.forEach(field => {
+            const statusValues = field.getAttribute('data-status').split(',');
+            if (statusValues.includes(selectedStatus)) {
+                field.style.display = 'block';
+            } else {
+                field.style.display = 'none';
+            }
+        });
+        
+        // Update for_sale dropdown based on status
+        const forSaleSelect = document.getElementById('for_sale');
+        if (forSaleSelect) {
+            if (selectedStatus === 'For Sale') {
+                forSaleSelect.value = 'Yes';
+            } else if (selectedStatus === 'Sold') {
+                forSaleSelect.value = 'Has Been Sold';
+            } else if (forSaleSelect.value === 'Yes' && selectedStatus !== 'For Sale') {
+                forSaleSelect.value = 'No';
+            }
+        }
+    }
+    
+    // Initial update and event listener
+    if (statusSelect) {
+        updateFieldVisibility();
+        statusSelect.addEventListener('change', updateFieldVisibility);
+        
+        // For Sale toggle behavior
+        const forSaleSelect = document.getElementById('for_sale');
+        if (forSaleSelect) {
+            forSaleSelect.addEventListener('change', function() {
+                if (this.value === 'Yes') {
+                    statusSelect.value = 'For Sale';
+                    updateFieldVisibility();
+                }
+            });
+        }
+    }
+    
+    // Image preview
+    const imageInput = document.getElementById('image');
+    const imagePreview = document.getElementById('imagePreview');
+    
+    if (imageInput && imagePreview) {
+        imageInput.addEventListener('change', function() {
+            if (this.files && this.files[0]) {
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    imagePreview.innerHTML = `<img src="${e.target.result}" class="img-fluid img-thumbnail" style="max-height: 200px;">`;
+                    imagePreview.style.display = 'block';
+                };
+                
+                reader.readAsDataURL(this.files[0]);
+            } else {
+                imagePreview.innerHTML = '';
+                imagePreview.style.display = 'none';
+            }
+        });
+    }
+    
     // Filter Dam and Sire options based on animal type
     const typeSelect = document.getElementById('type');
     const damSelect = document.getElementById('dam_id');
@@ -630,9 +795,6 @@ document.addEventListener('DOMContentLoaded', function() {
             // Skip the first option (None Selected) since we're keeping it
             if (index > 0 && option.dataset.type === selectedType) {
                 const newOption = option.cloneNode(true);
-                if (option.selected) {
-                    newOption.selected = true;
-                }
                 damSelect.add(newOption);
             }
         });
@@ -642,9 +804,6 @@ document.addEventListener('DOMContentLoaded', function() {
             // Skip the first option (None Selected) since we're keeping it
             if (index > 0 && option.dataset.type === selectedType) {
                 const newOption = option.cloneNode(true);
-                if (option.selected) {
-                    newOption.selected = true;
-                }
                 sireSelect.add(newOption);
             }
         });
@@ -662,5 +821,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
-</body>
-</html>
+<?php
+// Include footer
+include_once 'includes/footer.php';
+?>
