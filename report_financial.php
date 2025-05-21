@@ -1,15 +1,10 @@
 <?php
 /**
- * Financial Report Page - FIXED VERSION
+ * Financial Report Page - COMPREHENSIVE FIX
  * 
  * This page displays financial information for farm animals,
  * including purchases, sales, and overall farm profitability.
  */
-
-// Enable error reporting for debugging
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
 
 // Include the configuration file
 require_once 'config.php';
@@ -33,10 +28,10 @@ $page_title = "Financial Report";
 $page_header = "Farm Financial Report";
 $page_subheader = "Track and analyze your farm's financial performance";
 
-// Process date range
-$startDate = isset($_GET['start_date']) ? $_GET['start_date'] : date('Y-m-d', strtotime('-1 year'));
-$endDate = isset($_GET['end_date']) ? $_GET['end_date'] : date('Y-m-d');
-$selectedType = isset($_GET['type']) ? $_GET['type'] : null;
+// Process date range with appropriate defaults and validation
+$endDate = isset($_GET['end_date']) && !empty($_GET['end_date']) ? $_GET['end_date'] : date('Y-m-d');
+$startDate = isset($_GET['start_date']) && !empty($_GET['start_date']) ? $_GET['start_date'] : date('Y-m-d', strtotime('-1 year', strtotime($endDate)));
+$selectedType = isset($_GET['type']) && !empty($_GET['type']) ? $_GET['type'] : null;
 
 // Initialize variables
 $transactions = [];
@@ -49,140 +44,26 @@ $profitByType = [];
 $monthlyData = [];
 $inventoryValue = 0;
 $inventoryByType = [];
+$availableTypes = [];
 
+// Prepare monthly data array with all months in range
+$startMonth = new DateTime($startDate);
+$endMonth = new DateTime($endDate);
+$interval = new DateInterval('P1M'); // 1 month interval
+$period = new DatePeriod($startMonth, $interval, $endMonth->modify('+1 month')); // Include end month
+
+foreach ($period as $date) {
+    $monthKey = $date->format('Y-m');
+    $monthlyData[$monthKey] = [
+        'purchases' => 0,
+        'sales' => 0,
+        'profit' => 0,
+        'month_label' => $date->format('M Y')
+    ];
+}
+
+// Get available animal types for filter dropdown
 try {
-    // Get all financial transactions (purchases and sales)
-    $transactionsQuery = "
-        SELECT 
-            id, 
-            type, 
-            name, 
-            number, 
-            purch_cost, 
-            date_purchased, 
-            sell_price, 
-            date_sold, 
-            'purchase' as transaction_type 
-        FROM animals 
-        WHERE user_id = :user_id 
-        AND date_purchased IS NOT NULL 
-        AND date_purchased BETWEEN :start_date AND :end_date ";
-
-    if ($selectedType) {
-        $transactionsQuery .= "AND type = :type1 ";
-    }
-    
-    $transactionsQuery .= "UNION ALL
-        
-        SELECT 
-            id, 
-            type, 
-            name, 
-            number, 
-            purch_cost, 
-            date_purchased, 
-            sell_price, 
-            date_sold, 
-            'sale' as transaction_type 
-        FROM animals 
-        WHERE user_id = :user_id 
-        AND date_sold IS NOT NULL 
-        AND date_sold BETWEEN :start_date AND :end_date ";
-    
-    if ($selectedType) {
-        $transactionsQuery .= "AND type = :type2 ";
-    }
-    
-    $transactionsQuery .= "ORDER BY date_purchased, date_sold";
-
-    $transactionsStmt = $db->prepare($transactionsQuery);
-    $transactionsStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
-    $transactionsStmt->bindParam(':start_date', $startDate, PDO::PARAM_STR);
-    $transactionsStmt->bindParam(':end_date', $endDate, PDO::PARAM_STR);
-
-    if ($selectedType) {
-        $transactionsStmt->bindParam(':type1', $selectedType, PDO::PARAM_STR);
-        $transactionsStmt->bindParam(':type2', $selectedType, PDO::PARAM_STR);
-    }
-
-    $transactionsStmt->execute();
-    $transactions = $transactionsStmt->fetchAll();
-
-    // Prepare monthly data array with all months in range
-    $startMonth = new DateTime($startDate);
-    $endMonth = new DateTime($endDate);
-    $interval = new DateInterval('P1M'); // 1 month interval
-    $period = new DatePeriod($startMonth, $interval, $endMonth);
-
-    foreach ($period as $date) {
-        $monthKey = $date->format('Y-m');
-        $monthlyData[$monthKey] = [
-            'purchases' => 0,
-            'sales' => 0,
-            'profit' => 0,
-            'month_label' => $date->format('M Y')
-        ];
-    }
-
-    // Add current month if not already included
-    $currentMonthKey = date('Y-m');
-    if (!isset($monthlyData[$currentMonthKey])) {
-        $monthlyData[$currentMonthKey] = [
-            'purchases' => 0,
-            'sales' => 0,
-            'profit' => 0,
-            'month_label' => date('M Y')
-        ];
-    }
-
-    // Process transactions to calculate financial metrics
-    foreach ($transactions as $transaction) {
-        $animalType = $transaction['type'];
-        
-        // Initialize type data if not exists
-        if (!isset($purchasesByType[$animalType])) {
-            $purchasesByType[$animalType] = 0;
-            $salesByType[$animalType] = 0;
-            $profitByType[$animalType] = 0;
-        }
-        
-        if ($transaction['transaction_type'] === 'purchase' && !empty($transaction['purch_cost'])) {
-            $cost = floatval($transaction['purch_cost']);
-            $totalPurchases += $cost;
-            $purchasesByType[$animalType] += $cost;
-            
-            // Add to monthly data
-            $month = date('Y-m', strtotime($transaction['date_purchased']));
-            if (isset($monthlyData[$month])) {
-                $monthlyData[$month]['purchases'] += $cost;
-                $monthlyData[$month]['profit'] -= $cost;
-            }
-        }
-        
-        if ($transaction['transaction_type'] === 'sale' && !empty($transaction['sell_price'])) {
-            $price = floatval($transaction['sell_price']);
-            $totalSales += $price;
-            $salesByType[$animalType] += $price;
-            
-            // Calculate profit for this animal
-            $cost = !empty($transaction['purch_cost']) ? floatval($transaction['purch_cost']) : 0;
-            $profit = $price - $cost;
-            $totalProfit += $profit;
-            $profitByType[$animalType] += $profit;
-            
-            // Add to monthly data
-            $month = date('Y-m', strtotime($transaction['date_sold']));
-            if (isset($monthlyData[$month])) {
-                $monthlyData[$month]['sales'] += $price;
-                $monthlyData[$month]['profit'] += $profit;
-            }
-        }
-    }
-
-    // Sort monthly data by date
-    ksort($monthlyData);
-
-    // Get available animal types for filter dropdown
     $typesStmt = $db->prepare("
         SELECT DISTINCT type FROM animals 
         WHERE user_id = :user_id 
@@ -191,23 +72,189 @@ try {
     $typesStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
     $typesStmt->execute();
     $availableTypes = $typesStmt->fetchAll();
+} catch (Exception $e) {
+    // Just log the error and continue - no need to show error to user for this part
+    error_log("Error fetching animal types: " . $e->getMessage());
+}
 
-    // Current inventory with costs
+// Get purchase transactions
+try {
+    $purchaseQuery = "
+        SELECT 
+            id, 
+            type, 
+            name, 
+            number, 
+            purch_cost, 
+            date_purchased
+        FROM animals 
+        WHERE user_id = :user_id 
+        AND date_purchased IS NOT NULL 
+        AND purch_cost IS NOT NULL
+        AND date_purchased BETWEEN :start_date AND :end_date
+    ";
+    
+    if ($selectedType) {
+        $purchaseQuery .= " AND type = :type";
+    }
+    
+    $purchaseStmt = $db->prepare($purchaseQuery);
+    $purchaseStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
+    $purchaseStmt->bindParam(':start_date', $startDate, PDO::PARAM_STR);
+    $purchaseStmt->bindParam(':end_date', $endDate, PDO::PARAM_STR);
+    
+    if ($selectedType) {
+        $purchaseStmt->bindParam(':type', $selectedType, PDO::PARAM_STR);
+    }
+    
+    $purchaseStmt->execute();
+    
+    // Process purchase transactions
+    while ($transaction = $purchaseStmt->fetch(PDO::FETCH_ASSOC)) {
+        $animalType = $transaction['type'];
+        $cost = floatval($transaction['purch_cost']);
+        
+        // Skip if cost is zero
+        if ($cost <= 0) continue;
+        
+        // Add to transactions array with transaction type
+        $transaction['transaction_type'] = 'purchase';
+        $transactions[] = $transaction;
+        
+        // Update totals
+        $totalPurchases += $cost;
+        
+        // Initialize type data if not exists
+        if (!isset($purchasesByType[$animalType])) {
+            $purchasesByType[$animalType] = 0;
+            $salesByType[$animalType] = 0;
+            $profitByType[$animalType] = 0;
+        }
+        
+        $purchasesByType[$animalType] += $cost;
+        
+        // Add to monthly data
+        $month = date('Y-m', strtotime($transaction['date_purchased']));
+        if (isset($monthlyData[$month])) {
+            $monthlyData[$month]['purchases'] += $cost;
+            $monthlyData[$month]['profit'] -= $cost;
+        }
+    }
+} catch (Exception $e) {
+    error_log("Error fetching purchase data: " . $e->getMessage());
+}
+
+// Get sales transactions (separate query to avoid potential issues)
+try {
+    $saleQuery = "
+        SELECT 
+            id, 
+            type, 
+            name, 
+            number, 
+            purch_cost,
+            date_purchased,
+            sell_price, 
+            date_sold
+        FROM animals 
+        WHERE user_id = :user_id 
+        AND date_sold IS NOT NULL 
+        AND sell_price IS NOT NULL
+        AND date_sold BETWEEN :start_date AND :end_date
+    ";
+    
+    if ($selectedType) {
+        $saleQuery .= " AND type = :type";
+    }
+    
+    $saleStmt = $db->prepare($saleQuery);
+    $saleStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
+    $saleStmt->bindParam(':start_date', $startDate, PDO::PARAM_STR);
+    $saleStmt->bindParam(':end_date', $endDate, PDO::PARAM_STR);
+    
+    if ($selectedType) {
+        $saleStmt->bindParam(':type', $selectedType, PDO::PARAM_STR);
+    }
+    
+    $saleStmt->execute();
+    
+    // Process sale transactions
+    while ($transaction = $saleStmt->fetch(PDO::FETCH_ASSOC)) {
+        $animalType = $transaction['type'];
+        $price = floatval($transaction['sell_price']);
+        
+        // Skip if price is zero
+        if ($price <= 0) continue;
+        
+        // Add to transactions array with transaction type
+        $transaction['transaction_type'] = 'sale';
+        $transactions[] = $transaction;
+        
+        // Update totals
+        $totalSales += $price;
+        
+        // Initialize type data if not exists
+        if (!isset($purchasesByType[$animalType])) {
+            $purchasesByType[$animalType] = 0;
+            $salesByType[$animalType] = 0;
+            $profitByType[$animalType] = 0;
+        }
+        
+        $salesByType[$animalType] += $price;
+        
+        // Calculate profit for this animal
+        $cost = !empty($transaction['purch_cost']) ? floatval($transaction['purch_cost']) : 0;
+        $profit = $price - $cost;
+        $totalProfit += $profit;
+        $profitByType[$animalType] += $profit;
+        
+        // Add to monthly data
+        $month = date('Y-m', strtotime($transaction['date_sold']));
+        if (isset($monthlyData[$month])) {
+            $monthlyData[$month]['sales'] += $price;
+            $monthlyData[$month]['profit'] += $price; // For sold animals, add the full sale price to profit
+            
+            // If this animal was also purchased within the date range, we've already subtracted its cost
+            // Otherwise, subtract the purchase cost here to properly calculate profit
+            if (empty($transaction['date_purchased']) || 
+                strtotime($transaction['date_purchased']) < strtotime($startDate) || 
+                strtotime($transaction['date_purchased']) > strtotime($endDate)) {
+                $monthlyData[$month]['profit'] -= $cost;
+            }
+        }
+    }
+} catch (Exception $e) {
+    error_log("Error fetching sales data: " . $e->getMessage());
+}
+
+// Sort transactions by date
+usort($transactions, function($a, $b) {
+    $dateA = ($a['transaction_type'] === 'purchase') ? $a['date_purchased'] : $a['date_sold'];
+    $dateB = ($b['transaction_type'] === 'purchase') ? $b['date_purchased'] : $b['date_sold'];
+    return strtotime($dateA) - strtotime($dateB);
+});
+
+// Sort monthly data by date
+ksort($monthlyData);
+
+// Get current inventory value
+try {
     $inventoryQuery = "
         SELECT 
             type, 
             COUNT(*) as count, 
-            SUM(CASE WHEN purch_cost IS NOT NULL THEN purch_cost ELSE 0 END) as total_cost,
-            SUM(CASE WHEN for_sale = 'Yes' AND sell_price IS NOT NULL THEN sell_price ELSE 0 END) as total_listed
+            SUM(CASE WHEN purch_cost IS NOT NULL AND purch_cost > 0 THEN purch_cost ELSE 0 END) as total_cost,
+            SUM(CASE WHEN for_sale = 'Yes' AND sell_price IS NOT NULL AND sell_price > 0 THEN sell_price ELSE 0 END) as total_listed
         FROM animals 
         WHERE user_id = :user_id 
-        AND status = 'Alive'";
-        
+        AND status = 'Alive'
+    ";
+    
     if ($selectedType) {
         $inventoryQuery .= " AND type = :type";
     }
     
-    $inventoryQuery .= " GROUP BY type";
+    $inventoryQuery .= " GROUP BY type ORDER BY type";
     
     $inventoryStmt = $db->prepare($inventoryQuery);
     $inventoryStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
@@ -217,9 +264,8 @@ try {
     }
     
     $inventoryStmt->execute();
-    $inventory = $inventoryStmt->fetchAll();
-
-    foreach ($inventory as $item) {
+    
+    while ($item = $inventoryStmt->fetch(PDO::FETCH_ASSOC)) {
         $cost = !empty($item['total_cost']) ? floatval($item['total_cost']) : 0;
         $listedValue = !empty($item['total_listed']) ? floatval($item['total_listed']) : 0;
         
@@ -232,13 +278,7 @@ try {
         ];
     }
 } catch (Exception $e) {
-    // Log error for debugging
-    error_log("Financial Report Error: " . $e->getMessage());
-    $_SESSION['alert_message'] = "An error occurred while generating the financial report. Please try again later.";
-    $_SESSION['alert_type'] = "danger";
-    
-    // Uncomment for detailed error display during development
-    // echo "<div class='alert alert-danger'>" . $e->getMessage() . "</div>";
+    error_log("Error fetching inventory data: " . $e->getMessage());
 }
 
 // Include header
@@ -311,9 +351,15 @@ include_once 'includes/header.php';
                 <h5 class="mb-0">Financial Performance</h5>
             </div>
             <div class="card-body">
+                <?php if (empty($monthlyData)): ?>
+                <div class="alert alert-info">
+                    No financial data available for the selected date range and filters.
+                </div>
+                <?php else: ?>
                 <div class="chart-container" style="position: relative; height: 300px;">
                     <canvas id="financialChart"></canvas>
                 </div>
+                <?php endif; ?>
             </div>
         </div>
     </div>
@@ -362,6 +408,11 @@ include_once 'includes/header.php';
     </div>
     <div class="collapse show" id="typePerformance">
         <div class="card-body">
+            <?php if (empty($purchasesByType) && empty($salesByType)): ?>
+            <div class="alert alert-info">
+                No financial performance data available for the selected date range and filters.
+            </div>
+            <?php else: ?>
             <div class="row">
                 <div class="col-md-7">
                     <div class="chart-container" style="position: relative; height: 300px;">
@@ -380,7 +431,13 @@ include_once 'includes/header.php';
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php foreach ($purchasesByType as $type => $purchases): 
+                                <?php 
+                                // Combine purchases and sales to ensure all types are included
+                                $allTypes = array_unique(array_merge(array_keys($purchasesByType), array_keys($salesByType)));
+                                sort($allTypes);
+                                
+                                foreach ($allTypes as $type): 
+                                    $purchases = isset($purchasesByType[$type]) ? $purchasesByType[$type] : 0;
                                     $sales = isset($salesByType[$type]) ? $salesByType[$type] : 0;
                                     $profit = isset($profitByType[$type]) ? $profitByType[$type] : 0;
                                 ?>
@@ -406,6 +463,7 @@ include_once 'includes/header.php';
                     </div>
                 </div>
             </div>
+            <?php endif; ?>
         </div>
     </div>
 </div>
@@ -422,6 +480,11 @@ include_once 'includes/header.php';
     </div>
     <div class="collapse show" id="currentInventory">
         <div class="card-body">
+            <?php if (empty($inventoryByType)): ?>
+            <div class="alert alert-info">
+                No inventory data available for the selected filters.
+            </div>
+            <?php else: ?>
             <div class="row">
                 <div class="col-md-6">
                     <div class="chart-container" style="position: relative; height: 300px;">
@@ -454,6 +517,7 @@ include_once 'includes/header.php';
                     </table>
                 </div>
             </div>
+            <?php endif; ?>
         </div>
     </div>
 </div>
@@ -534,6 +598,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Financial Performance Chart
     const financialCtx = document.getElementById('financialChart');
     
+    <?php if (!empty($monthlyData)): ?>
     const monthLabels = [<?php 
         $labels = [];
         foreach ($monthlyData as $month) {
@@ -566,122 +631,135 @@ document.addEventListener('DOMContentLoaded', function() {
         echo implode(', ', $values);
     ?>];
     
-    new Chart(financialCtx, {
-        type: 'bar',
-        data: {
-            labels: monthLabels,
-            datasets: [
-                {
-                    label: 'Sales',
-                    data: salesData,
-                    backgroundColor: 'rgba(25, 135, 84, 0.7)',
-                    borderColor: 'rgba(25, 135, 84, 1)',
-                    borderWidth: 1
-                },
-                {
-                    label: 'Purchases',
-                    data: purchasesData,
-                    backgroundColor: 'rgba(220, 53, 69, 0.7)',
-                    borderColor: 'rgba(220, 53, 69, 1)',
-                    borderWidth: 1
-                },
-                {
-                    label: 'Profit',
-                    data: profitData,
-                    type: 'line',
-                    fill: false,
-                    borderColor: 'rgba(13, 110, 253, 1)',
-                    tension: 0.1
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    title: {
-                        display: true,
-                        text: 'Amount ($)'
+    if (financialCtx) {
+        new Chart(financialCtx, {
+            type: 'bar',
+            data: {
+                labels: monthLabels,
+                datasets: [
+                    {
+                        label: 'Sales',
+                        data: salesData,
+                        backgroundColor: 'rgba(25, 135, 84, 0.7)',
+                        borderColor: 'rgba(25, 135, 84, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Purchases',
+                        data: purchasesData,
+                        backgroundColor: 'rgba(220, 53, 69, 0.7)',
+                        borderColor: 'rgba(220, 53, 69, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Profit',
+                        data: profitData,
+                        type: 'line',
+                        fill: false,
+                        borderColor: 'rgba(13, 110, 253, 1)',
+                        tension: 0.1
                     }
-                },
-                x: {
-                    title: {
-                        display: true,
-                        text: 'Month'
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Amount ($)'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Month'
+                        }
                     }
                 }
             }
-        }
-    });
+        });
+    }
+    <?php endif; ?>
     
     // Type Performance Chart
     const typeCtx = document.getElementById('typePerformanceChart');
     
-    const typeLabels = [<?php 
-        $labels = [];
-        foreach ($purchasesByType as $type => $value) {
-            $labels[] = "'" . $type . "'";
+    <?php if (!empty($purchasesByType) || !empty($salesByType)): ?>
+    // Combine all types for display
+    const allTypes = [
+        <?php 
+        $allTypeKeys = array_unique(array_merge(array_keys($purchasesByType), array_keys($salesByType)));
+        sort($allTypeKeys);
+        foreach ($allTypeKeys as $type) {
+            echo "'" . $type . "', ";
         }
-        echo implode(', ', $labels);
-    ?>];
+        ?>
+    ];
     
-    const typePurchasesData = [<?php 
-        $values = [];
-        foreach ($purchasesByType as $value) {
-            $values[] = $value;
+    const typePurchasesData = [
+        <?php 
+        foreach ($allTypeKeys as $type) {
+            echo isset($purchasesByType[$type]) ? $purchasesByType[$type] : 0;
+            echo ", ";
         }
-        echo implode(', ', $values);
-    ?>];
+        ?>
+    ];
     
-    const typeSalesData = [<?php 
-        $values = [];
-        foreach ($purchasesByType as $type => $value) {
-            $values[] = isset($salesByType[$type]) ? $salesByType[$type] : 0;
+    const typeSalesData = [
+        <?php 
+        foreach ($allTypeKeys as $type) {
+            echo isset($salesByType[$type]) ? $salesByType[$type] : 0;
+            echo ", ";
         }
-        echo implode(', ', $values);
-    ?>];
+        ?>
+    ];
     
-    new Chart(typeCtx, {
-        type: 'bar',
-        data: {
-            labels: typeLabels,
-            datasets: [
-                {
-                    label: 'Sales',
-                    data: typeSalesData,
-                    backgroundColor: 'rgba(25, 135, 84, 0.7)',
-                    borderColor: 'rgba(25, 135, 84, 1)',
-                    borderWidth: 1
-                },
-                {
-                    label: 'Purchases',
-                    data: typePurchasesData,
-                    backgroundColor: 'rgba(220, 53, 69, 0.7)',
-                    borderColor: 'rgba(220, 53, 69, 1)',
-                    borderWidth: 1
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    title: {
-                        display: true,
-                        text: 'Amount ($)'
+    if (typeCtx) {
+        new Chart(typeCtx, {
+            type: 'bar',
+            data: {
+                labels: allTypes,
+                datasets: [
+                    {
+                        label: 'Sales',
+                        data: typeSalesData,
+                        backgroundColor: 'rgba(25, 135, 84, 0.7)',
+                        borderColor: 'rgba(25, 135, 84, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Purchases',
+                        data: typePurchasesData,
+                        backgroundColor: 'rgba(220, 53, 69, 0.7)',
+                        borderColor: 'rgba(220, 53, 69, 1)',
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Amount ($)'
+                        }
                     }
                 }
             }
-        }
-    });
+        });
+    }
+    <?php endif; ?>
     
     // Inventory Chart
     const inventoryCtx = document.getElementById('inventoryChart');
     
+    <?php if (!empty($inventoryByType)): ?>
     const inventoryLabels = [<?php 
         $labels = [];
         foreach ($inventoryByType as $type => $data) {
@@ -703,124 +781,144 @@ document.addEventListener('DOMContentLoaded', function() {
         'rgba(13, 110, 253, 0.7)',   // Blue
         'rgba(255, 193, 7, 0.7)',    // Yellow
         'rgba(220, 53, 69, 0.7)',    // Red
-        'rgba(108, 117, 125, 0.7)'   // Gray
+        'rgba(108, 117, 125, 0.7)',  // Gray
+        'rgba(111, 66, 193, 0.7)',   // Purple
+        'rgba(32, 201, 151, 0.7)',   // Teal
+        'rgba(253, 126, 20, 0.7)'    // Orange
     ];
     
-    new Chart(inventoryCtx, {
-        type: 'pie',
-        data: {
-            labels: inventoryLabels,
-            datasets: [{
-                data: inventoryValues,
-                backgroundColor: inventoryColors,
-                borderColor: 'white',
-                borderWidth: 1
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'right'
+    if (inventoryCtx) {
+        new Chart(inventoryCtx, {
+            type: 'pie',
+            data: {
+                labels: inventoryLabels,
+                datasets: [{
+                    data: inventoryValues,
+                    backgroundColor: inventoryColors.slice(0, inventoryLabels.length),
+                    borderColor: 'white',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right'
+                    }
                 }
             }
-        }
-    });
+        });
+    }
+    <?php endif; ?>
     
     // Export to CSV functionality
-    document.getElementById('exportCSV').addEventListener('click', function() {
-        // Create CSV content
-        let csv = [];
-        
-        // Add report title and date range
-        csv.push(['Farm Financial Report']);
-        csv.push(['Date Range: <?= date('M j, Y', strtotime($startDate)) ?> to <?= date('M j, Y', strtotime($endDate)) ?>']);
-        csv.push([]);
-        
-        // Add summary
-        csv.push(['Financial Summary']);
-        csv.push(['Total Sales', '$<?= number_format($totalSales, 2) ?>']);
-        csv.push(['Total Purchases', '$<?= number_format($totalPurchases, 2) ?>']);
-        csv.push(['Net Profit', '$<?= number_format($totalProfit, 2) ?>']);
-        csv.push(['Inventory Value', '$<?= number_format($inventoryValue, 2) ?>']);
-        csv.push([]);
-        
-        // Add performance by type
-        csv.push(['Performance by Animal Type']);
-        csv.push(['Animal Type', 'Purchases', 'Sales', 'Profit']);
-        
-        <?php foreach ($purchasesByType as $type => $purchases): 
-            $sales = isset($salesByType[$type]) ? $salesByType[$type] : 0;
-            $profit = isset($profitByType[$type]) ? $profitByType[$type] : 0;
-        ?>
-        csv.push(['<?= $type ?>', '$<?= number_format($purchases, 2) ?>', '$<?= number_format($sales, 2) ?>', '$<?= number_format($profit, 2) ?>']);
-        <?php endforeach; ?>
-        
-        csv.push(['Total', '$<?= number_format($totalPurchases, 2) ?>', '$<?= number_format($totalSales, 2) ?>', '$<?= number_format($totalProfit, 2) ?>']);
-        csv.push([]);
-        
-        // Add inventory value
-        csv.push(['Current Inventory Value']);
-        csv.push(['Animal Type', 'Count', 'Value']);
-        
-        <?php foreach ($inventoryByType as $type => $data): ?>
-        csv.push(['<?= $type ?>', '<?= $data['count'] ?>', '$<?= number_format($data['value'], 2) ?>']);
-        <?php endforeach; ?>
-        
-        csv.push(['Total', '<?= array_sum(array_column($inventoryByType, 'count')) ?>', '$<?= number_format($inventoryValue, 2) ?>']);
-        csv.push([]);
-        
-        // Add transactions
-        csv.push(['Transaction History']);
-        csv.push(['Date', 'Transaction', 'Animal', 'Type', 'Amount']);
-        
-        <?php 
-        foreach ($transactions as $transaction): 
-            $date = null;
-            $amount = 0;
-            $transactionType = '';
+    const exportButton = document.getElementById('exportCSV');
+    if (exportButton) {
+        exportButton.addEventListener('click', function() {
+            // Create CSV content
+            let csv = [];
             
-            if ($transaction['transaction_type'] === 'purchase' && !empty($transaction['date_purchased']) && !empty($transaction['purch_cost'])) {
-                $date = $transaction['date_purchased'];
-                $amount = -floatval($transaction['purch_cost']);
-                $transactionType = 'Purchase';
-            } elseif ($transaction['transaction_type'] === 'sale' && !empty($transaction['date_sold']) && !empty($transaction['sell_price'])) {
-                $date = $transaction['date_sold'];
-                $amount = floatval($transaction['sell_price']);
-                $transactionType = 'Sale';
-            } else {
-                continue; // Skip incomplete transactions
-            }
+            // Add report title and date range
+            csv.push(['Farm Financial Report']);
+            csv.push(['Date Range: <?= date('M j, Y', strtotime($startDate)) ?> to <?= date('M j, Y', strtotime($endDate)) ?>']);
+            csv.push([]);
             
-            $formattedDate = date('m/d/Y', strtotime($date));
-            $animalName = addslashes($transaction['name']);
-            $animalNumber = addslashes($transaction['number']);
-            $animalType = addslashes($transaction['type']);
-            $formattedAmount = number_format(abs($amount), 2);
-        ?>
-        csv.push(['<?= $formattedDate ?>', '<?= $transactionType ?>', '<?= $animalName ?> (<?= $animalNumber ?>)', '<?= $animalType ?>', '$<?= $formattedAmount ?>']);
-        <?php endforeach; ?>
-        
-        // Convert array to CSV string
-        let csvContent = '';
-        csv.forEach(function(row) {
-            csvContent += row.join(',') + '\n';
+            // Add summary
+            csv.push(['Financial Summary']);
+            csv.push(['Total Sales', '$<?= number_format($totalSales, 2) ?>']);
+            csv.push(['Total Purchases', '$<?= number_format($totalPurchases, 2) ?>']);
+            csv.push(['Net Profit', '$<?= number_format($totalProfit, 2) ?>']);
+            csv.push(['Inventory Value', '$<?= number_format($inventoryValue, 2) ?>']);
+            csv.push([]);
+            
+            <?php if (!empty($purchasesByType) || !empty($salesByType)): ?>
+            // Add performance by type
+            csv.push(['Performance by Animal Type']);
+            csv.push(['Animal Type', 'Purchases', 'Sales', 'Profit']);
+            
+            <?php 
+            $allTypeKeys = array_unique(array_merge(array_keys($purchasesByType), array_keys($salesByType)));
+            sort($allTypeKeys);
+            foreach ($allTypeKeys as $type): 
+                $purchases = isset($purchasesByType[$type]) ? $purchasesByType[$type] : 0;
+                $sales = isset($salesByType[$type]) ? $salesByType[$type] : 0;
+                $profit = isset($profitByType[$type]) ? $profitByType[$type] : 0;
+            ?>
+            csv.push(['<?= $type ?>', '$<?= number_format($purchases, 2) ?>', '$<?= number_format($sales, 2) ?>', '$<?= number_format($profit, 2) ?>']);
+            <?php endforeach; ?>
+            
+            csv.push(['Total', '$<?= number_format($totalPurchases, 2) ?>', '$<?= number_format($totalSales, 2) ?>', '$<?= number_format($totalProfit, 2) ?>']);
+            <?php endif; ?>
+            csv.push([]);
+            
+            <?php if (!empty($inventoryByType)): ?>
+            // Add inventory value
+            csv.push(['Current Inventory Value']);
+            csv.push(['Animal Type', 'Count', 'Value']);
+            
+            <?php foreach ($inventoryByType as $type => $data): ?>
+            csv.push(['<?= $type ?>', '<?= $data['count'] ?>', '$<?= number_format($data['value'], 2) ?>']);
+            <?php endforeach; ?>
+            
+            csv.push(['Total', '<?= array_sum(array_column($inventoryByType, 'count')) ?>', '$<?= number_format($inventoryValue, 2) ?>']);
+            <?php endif; ?>
+            csv.push([]);
+            
+            <?php if (!empty($transactions)): ?>
+            // Add transactions
+            csv.push(['Transaction History']);
+            csv.push(['Date', 'Transaction', 'Animal', 'Type', 'Amount']);
+            
+            <?php foreach ($transactions as $transaction): 
+                if ($transaction['transaction_type'] === 'purchase' && !empty($transaction['date_purchased']) && !empty($transaction['purch_cost'])) {
+                    $date = date('m/d/Y', strtotime($transaction['date_purchased']));
+                    $transactionType = 'Purchase';
+                    $amount = number_format(floatval($transaction['purch_cost']), 2);
+                } elseif ($transaction['transaction_type'] === 'sale' && !empty($transaction['date_sold']) && !empty($transaction['sell_price'])) {
+                    $date = date('m/d/Y', strtotime($transaction['date_sold']));
+                    $transactionType = 'Sale';
+                    $amount = number_format(floatval($transaction['sell_price']), 2);
+                } else {
+                    continue;
+                }
+                $animalName = addslashes($transaction['name']);
+                $animalNumber = addslashes($transaction['number']);
+                $animalType = addslashes($transaction['type']);
+            ?>
+            csv.push(['<?= $date ?>', '<?= $transactionType ?>', '<?= $animalName ?> (<?= $animalNumber ?>)', '<?= $animalType ?>', '$<?= $amount ?>']);
+            <?php endforeach; ?>
+            <?php endif; ?>
+            
+            // Convert array to CSV string
+            let csvContent = '';
+            csv.forEach(function(row) {
+                // Properly escape values with quotes if they contain commas
+                const processedRow = row.map(value => {
+                    // Check if value contains commas or quotes
+                    if (value && (value.includes(',') || value.includes('"'))) {
+                        // Escape quotes by doubling them and wrap in quotes
+                        return '"' + value.replace(/"/g, '""') + '"';
+                    }
+                    return value;
+                });
+                csvContent += processedRow.join(',') + '\n';
+            });
+            
+            // Create download link
+            const encodedUri = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvContent);
+            const link = document.createElement('a');
+            link.setAttribute('href', encodedUri);
+            link.setAttribute('download', 'farm_financial_report_<?= date('Y-m-d') ?>.csv');
+            document.body.appendChild(link);
+            
+            // Trigger download
+            link.click();
+            
+            // Clean up
+            document.body.removeChild(link);
         });
-        
-        // Create download link
-        const encodedUri = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvContent);
-        const link = document.createElement('a');
-        link.setAttribute('href', encodedUri);
-        link.setAttribute('download', 'farm_financial_report_<?= date('Y-m-d') ?>.csv');
-        document.body.appendChild(link);
-        
-        // Trigger download
-        link.click();
-        
-        // Clean up
-        document.body.removeChild(link);
-    });
+    }
 });
 </script>
 
