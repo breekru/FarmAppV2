@@ -52,7 +52,45 @@ $username = $is_logged_in ? htmlspecialchars($_SESSION["username"]) : '';
                         <li><a class="dropdown-item" href="animal_add.php">Add New Animal</a></li>
                     </ul>
                 </li>
-                
+                <?php
+
+                // First, get the count of pending animals
+                $pendingCount = 0;
+                if ($is_logged_in) {
+                    try {
+                        $pendingStmt = $db->prepare("
+                            SELECT COUNT(*) as count 
+                            FROM animals 
+                            WHERE user_id = :user_id AND pending_completion = 'Yes'
+                        ");
+                        $pendingStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
+                        $pendingStmt->execute();
+                        $pendingCount = $pendingStmt->fetchColumn();
+                    } catch (Exception $e) {
+                        error_log('Error counting pending animals: ' . $e->getMessage());
+                    }
+                }
+                ?>
+
+                <!-- Quick Add Button (shows on all pages) -->
+                <li class="nav-item d-none d-md-block">
+                    <a class="nav-link" href="quick_add.php">
+                        <i class="bi bi-plus-circle-fill"></i> Quick Add
+                    </a>
+                </li>
+
+                <!-- Pending Animals Link with Badge -->
+                <?php if ($pendingCount > 0): ?>
+                <li class="nav-item">
+                    <a class="nav-link position-relative" href="pending_completion.php">
+                        <i class="bi bi-exclamation-circle-fill"></i> Pending
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                            <?= $pendingCount ?>
+                            <span class="visually-hidden">animals pending completion</span>
+                        </span>
+                    </a>
+                </li>
+                <?php endif; ?>
                 <!-- Reports Dropdown -->
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle <?= (strpos($current_page, 'report') !== false) ? 'active' : '' ?>" 
