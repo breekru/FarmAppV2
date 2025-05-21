@@ -75,7 +75,7 @@ try {
     $_SESSION['alert_type'] = "danger";
     header("location: index.php");
     exit;
-}
+}include_once 'includes/header.php';
 ?>
 
 <!DOCTYPE html>
