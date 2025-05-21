@@ -357,9 +357,7 @@ document.addEventListener('DOMContentLoaded', function() {
     <?php endif; ?>
 });
 </script>
-<a href="quick_add.php" class="floating-action-button d-md-none">
-    <i class="bi bi-plus-lg"></i>
-</a>
+<?php include_once 'includes/mobile_tab_bar.php'; ?>
 <?php
 /**
  * Helper function to get appropriate badge class based on animal status
