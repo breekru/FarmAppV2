@@ -357,7 +357,9 @@ document.addEventListener('DOMContentLoaded', function() {
     <?php endif; ?>
 });
 </script>
-
+<a href="quick_add.php" class="floating-action-button d-md-none">
+    <i class="bi bi-plus-lg"></i>
+</a>
 <?php
 /**
  * Helper function to get appropriate badge class based on animal status
@@ -381,9 +383,7 @@ function getStatusBadgeClass($status) {
             return 'primary';
     }
 }
-<a href="quick_add.php" class="floating-action-button d-md-none">
-    <i class="bi bi-plus-lg"></i>
-</a>
+
 // Include footer
 include_once 'includes/footer.php';
 ?>
