@@ -29,7 +29,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
     <link rel="stylesheet" href="assets/css/styles.css">
     
     <!-- Favicon -->
-    <link rel="icon" type="image/ico" href="assets/img/favicon.ico">
+    <link rel="icon" type="image/ico" href="assets/img/logo.png">
 </head>
 <body>
     <!-- Main container -->
