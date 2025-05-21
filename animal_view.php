@@ -1,9 +1,9 @@
 <?php
 /**
- * Animal View Page
+ * Animal View Page - ENHANCED VERSION
  * 
  * Displays detailed information about a specific animal.
- * This version is built specifically for your database structure.
+ * Enhanced with structured medication and notes entries.
  */
 
 // Include the configuration file
@@ -59,10 +59,32 @@ try {
     $purchasedFormatted = !empty($animal['date_purchased']) ? date("F j, Y", strtotime($animal['date_purchased'])) : "N/A";
     $soldFormatted = !empty($animal['date_sold']) ? date("F j, Y", strtotime($animal['date_sold'])) : "N/A";
 
+    // Fetch medication entries
+    $medications = [];
+    $medStmt = $db->prepare("
+        SELECT * FROM animal_medications
+        WHERE animal_id = :animal_id
+        ORDER BY date DESC
+    ");
+    $medStmt->bindParam(':animal_id', $id, PDO::PARAM_INT);
+    $medStmt->execute();
+    $medications = $medStmt->fetchAll();
+
+    // Fetch note entries
+    $notes = [];
+    $noteStmt = $db->prepare("
+        SELECT * FROM animal_notes
+        WHERE animal_id = :animal_id
+        ORDER BY date DESC
+    ");
+    $noteStmt->bindParam(':animal_id', $id, PDO::PARAM_INT);
+    $noteStmt->execute();
+    $notes = $noteStmt->fetchAll();
+
     // Get return URL based on animal type
-    $returnUrl = 'index.php';
+    $returnUrl = 'animal_list.php';
     if (!empty($animal['type'])) {
-        $returnUrl = 'index.php?type=' . urlencode($animal['type']);
+        $returnUrl .= '?type=' . urlencode($animal['type']);
     }
 
     // Set page title
@@ -75,28 +97,13 @@ try {
     $_SESSION['alert_type'] = "danger";
     header("location: index.php");
     exit;
-}include_once 'includes/header.php';
+}
+
+// Include header
+include_once 'includes/header.php';
 ?>
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $page_title ?> - FarmApp</title>
-    
-    <!-- Bootstrap 5 CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    
-    <!-- Bootstrap Icons -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
-    
-    <!-- Custom CSS -->
-    <link rel="stylesheet" href="assets/css/styles.css">
-</head>
-<body>
-    <div class="container py-4">
-    <div class="row mb-3">
+<div class="row mb-3">
     <div class="col-md-6">
         <a href="<?= $returnUrl ?>" class="btn btn-outline-secondary">
             <i class="bi bi-arrow-left"></i> Back to List
@@ -104,7 +111,7 @@ try {
     </div>
     <div class="col-md-6 text-end">
         <div class="btn-group">
-            <a href="report_lineage.php?id=<?= $id ?>" class="btn btn-info">
+            <a href="report_lineage.php?id=<?= $id ?>" class="btn btn-info text-white">
                 <i class="bi bi-diagram-3"></i> View Lineage
             </a>
             <a href="animal_edit.php?id=<?= $id ?>" class="btn btn-primary">
@@ -119,6 +126,34 @@ try {
     </div>
 </div>
 
+<!-- Animal Information Tabs -->
+<ul class="nav nav-tabs mb-4" id="animalTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="details-tab" data-bs-toggle="tab" data-bs-target="#details" type="button" role="tab" aria-controls="details" aria-selected="true">
+            <i class="bi bi-card-list"></i> Details
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="medications-tab" data-bs-toggle="tab" data-bs-target="#medications" type="button" role="tab" aria-controls="medications" aria-selected="false">
+            <i class="bi bi-capsule"></i> Medications 
+            <?php if (count($medications) > 0): ?>
+            <span class="badge bg-primary rounded-pill"><?= count($medications) ?></span>
+            <?php endif; ?>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="notes-tab" data-bs-toggle="tab" data-bs-target="#notes" type="button" role="tab" aria-controls="notes" aria-selected="false">
+            <i class="bi bi-journal-text"></i> Notes
+            <?php if (count($notes) > 0): ?>
+            <span class="badge bg-primary rounded-pill"><?= count($notes) ?></span>
+            <?php endif; ?>
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="animalTabsContent">
+    <!-- Details Tab -->
+    <div class="tab-pane fade show active" id="details" role="tabpanel" aria-labelledby="details-tab">
         <div class="row">
             <!-- Left Column - Main Details -->
             <div class="col-lg-8">
@@ -204,94 +239,94 @@ try {
                         </div>
                         <?php endif; ?>
 
-<!-- Parent Information (if available) -->
-<div class="mb-4">
-    <h4>Lineage</h4>
-    <div class="row">
-        <div class="col-md-6">
-            <div class="card mb-3">
-                <div class="card-header">Dam (Mother)</div>
-                <div class="card-body">
-                    <?php if (!empty($animal['dam_id'])): 
-                        // Fetch dam details
-                        $damStmt = $db->prepare("
-                            SELECT id, name, number 
-                            FROM animals 
-                            WHERE id = :dam_id AND user_id = :user_id
-                        ");
-                        $damStmt->bindParam(':dam_id', $animal['dam_id'], PDO::PARAM_INT);
-                        $damStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
-                        $damStmt->execute();
-                        $dam = $damStmt->fetch();
-                        
-                        if ($dam):
-                    ?>
-                    <p>
-                        <a href="animal_view.php?id=<?= $dam['id'] ?>">
-                            <?= htmlspecialchars($dam['name']) ?> (<?= htmlspecialchars($dam['number']) ?>)
-                        </a>
-                    </p>
-                    <div class="mt-2">
-                        <a href="report_lineage.php?id=<?= $dam['id'] ?>" class="btn btn-sm btn-info">
-                            <i class="bi bi-diagram-3"></i> View Lineage
-                        </a>
-                    </div>
-                    <?php else: ?>
-                    <p>
-                        <a href="animal_view.php?id=<?= $animal['dam_id'] ?>">
-                            View Dam
-                        </a>
-                    </p>
-                    <?php endif; ?>
-                    <?php else: ?>
-                    <p class="text-muted">No dam information available</p>
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-6">
-            <div class="card mb-3">
-                <div class="card-header">Sire (Father)</div>
-                <div class="card-body">
-                    <?php if (!empty($animal['sire_id'])): 
-                        // Fetch sire details
-                        $sireStmt = $db->prepare("
-                            SELECT id, name, number 
-                            FROM animals 
-                            WHERE id = :sire_id AND user_id = :user_id
-                        ");
-                        $sireStmt->bindParam(':sire_id', $animal['sire_id'], PDO::PARAM_INT);
-                        $sireStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
-                        $sireStmt->execute();
-                        $sire = $sireStmt->fetch();
-                        
-                        if ($sire):
-                    ?>
-                    <p>
-                        <a href="animal_view.php?id=<?= $sire['id'] ?>">
-                            <?= htmlspecialchars($sire['name']) ?> (<?= htmlspecialchars($sire['number']) ?>)
-                        </a>
-                    </p>
-                    <div class="mt-2">
-                        <a href="report_lineage.php?id=<?= $sire['id'] ?>" class="btn btn-sm btn-info">
-                            <i class="bi bi-diagram-3"></i> View Lineage
-                        </a>
-                    </div>
-                    <?php else: ?>
-                    <p>
-                        <a href="animal_view.php?id=<?= $animal['sire_id'] ?>">
-                            View Sire
-                        </a>
-                    </p>
-                    <?php endif; ?>
-                    <?php else: ?>
-                    <p class="text-muted">No sire information available</p>
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+                        <!-- Parent Information (if available) -->
+                        <div class="mb-4">
+                            <h4>Lineage</h4>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card mb-3">
+                                        <div class="card-header">Dam (Mother)</div>
+                                        <div class="card-body">
+                                            <?php if (!empty($animal['dam_id'])): 
+                                                // Fetch dam details
+                                                $damStmt = $db->prepare("
+                                                    SELECT id, name, number 
+                                                    FROM animals 
+                                                    WHERE id = :dam_id AND user_id = :user_id
+                                                ");
+                                                $damStmt->bindParam(':dam_id', $animal['dam_id'], PDO::PARAM_INT);
+                                                $damStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
+                                                $damStmt->execute();
+                                                $dam = $damStmt->fetch();
+                                                
+                                                if ($dam):
+                                            ?>
+                                            <p>
+                                                <a href="animal_view.php?id=<?= $dam['id'] ?>">
+                                                    <?= htmlspecialchars($dam['name']) ?> (<?= htmlspecialchars($dam['number']) ?>)
+                                                </a>
+                                            </p>
+                                            <div class="mt-2">
+                                                <a href="report_lineage.php?id=<?= $dam['id'] ?>" class="btn btn-sm btn-info">
+                                                    <i class="bi bi-diagram-3"></i> View Lineage
+                                                </a>
+                                            </div>
+                                            <?php else: ?>
+                                            <p>
+                                                <a href="animal_view.php?id=<?= $animal['dam_id'] ?>">
+                                                    View Dam
+                                                </a>
+                                            </p>
+                                            <?php endif; ?>
+                                            <?php else: ?>
+                                            <p class="text-muted">No dam information available</p>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card mb-3">
+                                        <div class="card-header">Sire (Father)</div>
+                                        <div class="card-body">
+                                            <?php if (!empty($animal['sire_id'])): 
+                                                // Fetch sire details
+                                                $sireStmt = $db->prepare("
+                                                    SELECT id, name, number 
+                                                    FROM animals 
+                                                    WHERE id = :sire_id AND user_id = :user_id
+                                                ");
+                                                $sireStmt->bindParam(':sire_id', $animal['sire_id'], PDO::PARAM_INT);
+                                                $sireStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
+                                                $sireStmt->execute();
+                                                $sire = $sireStmt->fetch();
+                                                
+                                                if ($sire):
+                                            ?>
+                                            <p>
+                                                <a href="animal_view.php?id=<?= $sire['id'] ?>">
+                                                    <?= htmlspecialchars($sire['name']) ?> (<?= htmlspecialchars($sire['number']) ?>)
+                                                </a>
+                                            </p>
+                                            <div class="mt-2">
+                                                <a href="report_lineage.php?id=<?= $sire['id'] ?>" class="btn btn-sm btn-info">
+                                                    <i class="bi bi-diagram-3"></i> View Lineage
+                                                </a>
+                                            </div>
+                                            <?php else: ?>
+                                            <p>
+                                                <a href="animal_view.php?id=<?= $animal['sire_id'] ?>">
+                                                    View Sire
+                                                </a>
+                                            </p>
+                                            <?php endif; ?>
+                                            <?php else: ?>
+                                            <p class="text-muted">No sire information available</p>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -340,66 +375,247 @@ try {
                     </div>
                 </div>
                 
-                <!-- Notes -->
-                <?php if (!empty($animal['notes'])): ?>
+                <!-- Recent Activity Summary -->
                 <div class="card shadow-sm mb-4">
                     <div class="card-header">
-                        <h5 class="card-title mb-0">Notes</h5>
+                        <h5 class="card-title mb-0">Recent Activity</h5>
                     </div>
                     <div class="card-body">
-                        <div class="notes-content">
-                            <?= nl2br(htmlspecialchars($animal['notes'])) ?>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span><i class="bi bi-capsule text-primary me-2"></i> Medications:</span>
+                            <span class="badge bg-primary rounded-pill"><?= count($medications) ?></span>
                         </div>
-                    </div>
-                </div>
-                <?php endif; ?>
-                
-                <!-- Medication History -->
-                <?php if (!empty($animal['meds'])): ?>
-                <div class="card shadow-sm mb-4">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">Medication History</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="meds-content">
-                            <?= nl2br(htmlspecialchars($animal['meds'])) ?>
+                        <div class="d-flex justify-content-between mb-3">
+                            <span><i class="bi bi-journal-text text-success me-2"></i> Notes:</span>
+                            <span class="badge bg-success rounded-pill"><?= count($notes) ?></span>
                         </div>
-                    </div>
-                </div>
-                <?php endif; ?>
-            </div>
-        </div>
-
-        <!-- Delete Confirmation Modal -->
-        <div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="deleteModalLabel">Confirm Delete</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <div class="modal-body">
-                        <p>Are you sure you want to delete <?= htmlspecialchars($animal['name']) ?> 
-                        (<?= htmlspecialchars($animal['number']) ?>)?</p>
                         
-                        <p class="text-danger">This action cannot be undone.</p>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <a href="delete.php?id=<?= $id ?>" class="btn btn-danger">Delete</a>
+                        <?php if (count($medications) > 0 || count($notes) > 0): ?>
+                        <div class="list-group small">
+                            <?php 
+                            // Combine and sort both types of entries
+                            $recentActivity = [];
+                            
+                            foreach ($medications as $med) {
+                                $recentActivity[] = [
+                                    'date' => $med['date'],
+                                    'type' => 'medication',
+                                    'title' => $med['type'],
+                                    'id' => $med['id']
+                                ];
+                            }
+                            
+                            foreach ($notes as $note) {
+                                $recentActivity[] = [
+                                    'date' => $note['date'],
+                                    'type' => 'note',
+                                    'title' => $note['title'],
+                                    'id' => $note['id']
+                                ];
+                            }
+                            
+                            // Sort by date (newest first)
+                            usort($recentActivity, function($a, $b) {
+                                return strtotime($b['date']) - strtotime($a['date']);
+                            });
+                            
+                            // Show only the 5 most recent activities
+                            $recentActivity = array_slice($recentActivity, 0, 5);
+                            
+                            foreach ($recentActivity as $activity):
+                                $activityDate = date('M j, Y', strtotime($activity['date']));
+                                $icon = $activity['type'] === 'medication' ? 'bi-capsule text-primary' : 'bi-journal-text text-success';
+                                $tabId = $activity['type'] === 'medication' ? 'medications-tab' : 'notes-tab';
+                            ?>
+                            <a href="#" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" 
+                               onclick="document.getElementById('<?= $tabId ?>').click(); return false;">
+                                <div>
+                                    <i class="bi <?= $icon ?> me-2"></i>
+                                    <span><?= htmlspecialchars($activity['title']) ?></span>
+                                    <small class="text-muted ms-2"><?= $activityDate ?></small>
+                                </div>
+                                <i class="bi bi-chevron-right"></i>
+                            </a>
+                            <?php endforeach; ?>
+                        </div>
+                        <?php else: ?>
+                        <p class="text-center text-muted">No recent activity</p>
+                        <div class="d-grid gap-2">
+                            <a href="animal_edit.php?id=<?= $id ?>#medications" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-plus-circle"></i> Add Medication
+                            </a>
+                            <a href="animal_edit.php?id=<?= $id ?>#notes" class="btn btn-sm btn-outline-success">
+                                <i class="bi bi-plus-circle"></i> Add Note
+                            </a>
+                        </div>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-
-    <!-- Bootstrap Bundle with Popper -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
-    <!-- Custom JavaScript -->
-    <script src="assets/js/main.js"></script>
-</body>
-</html>
+    <!-- Medications Tab -->
+    <div class="tab-pane fade" id="medications" role="tabpanel" aria-labelledby="medications-tab">
+        <div class="card shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="card-title mb-0">Medication History</h3>
+                <a href="animal_edit.php?id=<?= $id ?>#medications" class="btn btn-primary btn-sm">
+                    <i class="bi bi-plus-circle"></i> Add Medication
+                </a>
+            </div>
+            <div class="card-body">
+                <?php if (empty($medications)): ?>
+                <div class="alert alert-info">
+                    <p>No medication records found for this animal. Click the "Add Medication" button to add a medication entry.</p>
+                </div>
+                <?php else: ?>
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Amount</th>
+                                <th>Notes</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($medications as $med): ?>
+                            <tr>
+                                <td><?= date('M j, Y', strtotime($med['date'])) ?></td>
+                                <td><?= htmlspecialchars($med['type']) ?></td>
+                                <td><?= htmlspecialchars($med['amount']) ?></td>
+                                <td>
+                                    <?php if (!empty($med['notes'])): ?>
+                                    <button type="button" class="btn btn-sm btn-outline-info" data-bs-toggle="popover" 
+                                            title="Medication Notes" data-bs-content="<?= htmlspecialchars($med['notes']) ?>">
+                                        <i class="bi bi-info-circle"></i> View Notes
+                                    </button>
+                                    <?php else: ?>
+                                    <span class="text-muted">No notes</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <a href="animal_edit.php?id=<?= $id ?>&edit_medication=<?= $med['id'] ?>#medications" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-pencil"></i> Edit
+                                    </a>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Notes Tab -->
+    <div class="tab-pane fade" id="notes" role="tabpanel" aria-labelledby="notes-tab">
+        <div class="card shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="card-title mb-0">Notes</h3>
+                <a href="animal_edit.php?id=<?= $id ?>#notes" class="btn btn-primary btn-sm">
+                    <i class="bi bi-plus-circle"></i> Add Note
+                </a>
+            </div>
+            <div class="card-body">
+                <?php if (empty($notes)): ?>
+                <div class="alert alert-info">
+                    <p>No notes found for this animal. Click the "Add Note" button to add a note entry.</p>
+                </div>
+                <?php else: ?>
+                <div class="accordion" id="notesAccordion">
+                    <?php foreach ($notes as $index => $note): ?>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="noteHeading<?= $note['id'] ?>">
+                            <button class="accordion-button <?= $index > 0 ? 'collapsed' : '' ?>" type="button" data-bs-toggle="collapse" 
+                                    data-bs-target="#noteCollapse<?= $note['id'] ?>" aria-expanded="<?= $index === 0 ? 'true' : 'false' ?>" 
+                                    aria-controls="noteCollapse<?= $note['id'] ?>">
+                                <div class="d-flex justify-content-between align-items-center w-100 me-3">
+                                    <strong><?= htmlspecialchars($note['title']) ?></strong>
+                                    <span class="badge bg-secondary rounded-pill"><?= date('M j, Y', strtotime($note['date'])) ?></span>
+                                </div>
+                            </button>
+                        </h2>
+                        <div id="noteCollapse<?= $note['id'] ?>" class="accordion-collapse collapse <?= $index === 0 ? 'show' : '' ?>" 
+                             aria-labelledby="noteHeading<?= $note['id'] ?>" data-bs-parent="#notesAccordion">
+                            <div class="accordion-body">
+                                <div class="mb-3">
+                                    <?= nl2br(htmlspecialchars($note['content'])) ?>
+                                </div>
+                                <div class="d-flex justify-content-end">
+                                    <a href="animal_edit.php?id=<?= $id ?>&edit_note=<?= $note['id'] ?>#notes" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-pencil"></i> Edit
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete <?= htmlspecialchars($animal['name']) ?> 
+                (<?= htmlspecialchars($animal['number']) ?>)?</p>
+                
+                <p class="text-danger">This action cannot be undone and will delete all associated medication and note records.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <a href="animal_delete.php?id=<?= $id ?>" class="btn btn-danger">Delete</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize popovers
+    var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'))
+    var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
+        return new bootstrap.Popover(popoverTriggerEl, {
+            html: true,
+            trigger: 'click',
+            placement: 'top'
+        });
+    });
+    
+    // Hide popovers when clicking outside
+    document.addEventListener('click', function (e) {
+        if (!e.target.closest('[data-bs-toggle="popover"]') && 
+            !e.target.closest('.popover')) {
+            popoverTriggerList.forEach(function(popover) {
+                bootstrap.Popover.getInstance(popover)?.hide();
+            });
+        }
+    });
+    
+    // Auto-activate tab based on URL hash
+    const hash = window.location.hash;
+    if (hash) {
+        const triggerEl = document.querySelector(`button[data-bs-target="${hash}"]`);
+        if (triggerEl) {
+            new bootstrap.Tab(triggerEl).show();
+        }
+    }
+});
+</script>
 
 <?php
 /**
@@ -424,4 +640,7 @@ function getStatusBadgeClass($status) {
             return 'primary';
     }
 }
+
+// Include footer
+include_once 'includes/footer.php';
 ?>
