@@ -625,17 +625,27 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // Add matching Dam options
-        damOptions.forEach(function(option) {
-            if (option.value === "" || option.dataset.type === selectedType) {
-                damSelect.add(option.cloneNode(true));
+        // Add matching Dam options (skip the first "None Selected" option)
+        damOptions.forEach(function(option, index) {
+            // Skip the first option (None Selected) since we're keeping it
+            if (index > 0 && option.dataset.type === selectedType) {
+                const newOption = option.cloneNode(true);
+                if (option.selected) {
+                    newOption.selected = true;
+                }
+                damSelect.add(newOption);
             }
         });
         
-        // Add matching Sire options
-        sireOptions.forEach(function(option) {
-            if (option.value === "" || option.dataset.type === selectedType) {
-                sireSelect.add(option.cloneNode(true));
+        // Add matching Sire options (skip the first "None Selected" option)
+        sireOptions.forEach(function(option, index) {
+            // Skip the first option (None Selected) since we're keeping it
+            if (index > 0 && option.dataset.type === selectedType) {
+                const newOption = option.cloneNode(true);
+                if (option.selected) {
+                    newOption.selected = true;
+                }
+                sireSelect.add(newOption);
             }
         });
     }
