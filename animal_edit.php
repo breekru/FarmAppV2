@@ -89,19 +89,38 @@ $errors = [];
 $success = false;
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    // Get form data and sanitize
-    $type = filter_input(INPUT_POST, 'type', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
-    $breed = filter_input(INPUT_POST, 'breed', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
-    $number = filter_input(INPUT_POST, 'number', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
-    $name = filter_input(INPUT_POST, 'name', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
-    $gender = filter_input(INPUT_POST, 'gender', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
-    $dob = filter_input(INPUT_POST, 'dob', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
-    $dod = filter_input(INPUT_POST, 'dod', FILTER_SANITIZE_FULL_SPECIAL_CHARS) ?: null;
-    $dam_id = filter_input(INPUT_POST, 'dam_id', FILTER_SANITIZE_NUMBER_INT) ?: null;
-    $sire_id = filter_input(INPUT_POST, 'sire_id', FILTER_SANITIZE_NUMBER_INT) ?: null;
-    $status = filter_input(INPUT_POST, 'status', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
-    $date_purchased = filter_input(INPUT_POST, 'date_purchased', FILTER_SANITIZE_FULL_SPECIAL_CHARS) ?: null;
-    $date_sold = filter_input(INPUT_POST, 'date_sold', FILTER_SANITIZE_FULL_SPECIAL_CHARS) ?: null;
+
+
+// Get form data and sanitize - FIXED version for date fields
+$type = filter_input(INPUT_POST, 'type', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+$breed = filter_input(INPUT_POST, 'breed', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+$number = filter_input(INPUT_POST, 'number', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+$name = filter_input(INPUT_POST, 'name', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+$gender = filter_input(INPUT_POST, 'gender', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+
+// Handle date fields properly - convert empty strings to NULL
+$dob = !empty($_POST['dob']) ? $_POST['dob'] : null;
+$dod = !empty($_POST['dod']) ? $_POST['dod'] : null;
+$date_purchased = !empty($_POST['date_purchased']) ? $_POST['date_purchased'] : null;
+$date_sold = !empty($_POST['date_sold']) ? $_POST['date_sold'] : null;
+
+$dam_id = filter_input(INPUT_POST, 'dam_id', FILTER_SANITIZE_NUMBER_INT) ?: null;
+$sire_id = filter_input(INPUT_POST, 'sire_id', FILTER_SANITIZE_NUMBER_INT) ?: null;
+$status = filter_input(INPUT_POST, 'status', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+$sell_price = filter_input(INPUT_POST, 'sell_price', FILTER_SANITIZE_FULL_SPECIAL_CHARS) ?: null;
+$sell_info = filter_input(INPUT_POST, 'sell_info', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+$purch_cost = filter_input(INPUT_POST, 'purch_cost', FILTER_SANITIZE_FULL_SPECIAL_CHARS) ?: null;
+$purch_info = filter_input(INPUT_POST, 'purch_info', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+    
+// FIX: Better handling for notes and medication fields
+$notes = isset($_POST['notes']) ? trim($_POST['notes']) : '';
+$meds = isset($_POST['meds']) ? trim($_POST['meds']) : '';
+    
+$for_sale = filter_input(INPUT_POST, 'for_sale', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+$reg_num = filter_input(INPUT_POST, 'reg_num', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+$reg_name = filter_input(INPUT_POST, 'reg_name', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+$color = filter_input(INPUT_POST, 'color', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+
     $sell_price = filter_input(INPUT_POST, 'sell_price', FILTER_SANITIZE_FULL_SPECIAL_CHARS) ?: null;
     $sell_info = filter_input(INPUT_POST, 'sell_info', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
     $purch_cost = filter_input(INPUT_POST, 'purch_cost', FILTER_SANITIZE_FULL_SPECIAL_CHARS) ?: null;
