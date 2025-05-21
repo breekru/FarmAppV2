@@ -96,25 +96,28 @@ try {
 </head>
 <body>
     <div class="container py-4">
-        <div class="row mb-3">
-            <div class="col-md-6">
-                <a href="<?= $returnUrl ?>" class="btn btn-outline-secondary">
-                    <i class="bi bi-arrow-left"></i> Back to List
-                </a>
-            </div>
-            <div class="col-md-6 text-end">
-                <div class="btn-group">
-                    <a href="animal_edit.php?id=<?= $id ?>" class="btn btn-primary">
-                        <i class="bi bi-pencil"></i> Edit
-                    </a>
-                    <button type="button" class="btn btn-danger" 
-                            data-bs-toggle="modal" 
-                            data-bs-target="#deleteModal">
-                        <i class="bi bi-trash"></i> Delete
-                    </button>
-                </div>
-            </div>
+    <div class="row mb-3">
+    <div class="col-md-6">
+        <a href="<?= $returnUrl ?>" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Back to List
+        </a>
+    </div>
+    <div class="col-md-6 text-end">
+        <div class="btn-group">
+            <a href="report_lineage.php?id=<?= $id ?>" class="btn btn-info">
+                <i class="bi bi-diagram-3"></i> View Lineage
+            </a>
+            <a href="animal_edit.php?id=<?= $id ?>" class="btn btn-primary">
+                <i class="bi bi-pencil"></i> Edit
+            </a>
+            <button type="button" class="btn btn-danger" 
+                    data-bs-toggle="modal" 
+                    data-bs-target="#deleteModal">
+                <i class="bi bi-trash"></i> Delete
+            </button>
         </div>
+    </div>
+</div>
 
         <div class="row">
             <!-- Left Column - Main Details -->
