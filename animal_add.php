@@ -238,28 +238,28 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 // Get parent options for selection
 try {
     // Get all possible dams (female animals) for parent selection dropdown
-    $damStmt = $db->prepare("
-        SELECT id, name, number 
-        FROM animals 
-        WHERE user_id = :user_id 
-        AND gender = 'Female' 
-        ORDER BY name ASC
-    ");
-    $damStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
-    $damStmt->execute();
-    $dams = $damStmt->fetchAll();
+$damStmt = $db->prepare("
+SELECT id, name, number, type
+FROM animals 
+WHERE user_id = :user_id 
+AND gender = 'Female' 
+ORDER BY name ASC
+");
+$damStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
+$damStmt->execute();
+$dams = $damStmt->fetchAll();
 
-    // Get all possible sires (male animals) for parent selection dropdown
-    $sireStmt = $db->prepare("
-        SELECT id, name, number 
-        FROM animals 
-        WHERE user_id = :user_id 
-        AND gender = 'Male' 
-        ORDER BY name ASC
-    ");
-    $sireStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
-    $sireStmt->execute();
-    $sires = $sireStmt->fetchAll();
+// Get all possible sires (male animals) for parent selection dropdown
+$sireStmt = $db->prepare("
+SELECT id, name, number, type
+FROM animals 
+WHERE user_id = :user_id 
+AND gender = 'Male' 
+ORDER BY name ASC
+");
+$sireStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
+$sireStmt->execute();
+$sires = $sireStmt->fetchAll();
 } catch (Exception $e) {
     error_log('Animal Add Error: ' . $e->getMessage());
     $errors[] = "Error loading parent options: " . $e->getMessage();
@@ -392,29 +392,28 @@ try {
                             </div>
                             
                             <div class="mb-3">
-                                <label for="dam_id" class="form-label">Dam (Mother)</label>
-                                <select id="dam_id" name="dam_id" class="form-select">
-                                    <option value="">None Selected</option>
-                                    <?php foreach ($dams as $dam): ?>
-                                    <option value="<?= $dam['id'] ?>">
-                                        <?= htmlspecialchars($dam['name']) ?> (<?= htmlspecialchars($dam['number']) ?>)
-                                    </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label for="sire_id" class="form-label">Sire (Father)</label>
-                                <select id="sire_id" name="sire_id" class="form-select">
-                                    <option value="">None Selected</option>
-                                    <?php foreach ($sires as $sire): ?>
-                                    <option value="<?= $sire['id'] ?>">
-                                        <?= htmlspecialchars($sire['name']) ?> (<?= htmlspecialchars($sire['number']) ?>)
-                                    </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            
+    <label for="dam_id" class="form-label">Dam (Mother)</label>
+    <select id="dam_id" name="dam_id" class="form-select">
+        <option value="">None Selected</option>
+        <?php foreach ($dams as $dam): ?>
+        <option value="<?= $dam['id'] ?>" data-type="<?= htmlspecialchars($dam['type']) ?>">
+            <?= htmlspecialchars($dam['name']) ?> (<?= htmlspecialchars($dam['number']) ?>)
+        </option>
+        <?php endforeach; ?>
+    </select>
+</div>
+
+<div class="mb-3">
+    <label for="sire_id" class="form-label">Sire (Father)</label>
+    <select id="sire_id" name="sire_id" class="form-select">
+        <option value="">None Selected</option>
+        <?php foreach ($sires as $sire): ?>
+        <option value="<?= $sire['id'] ?>" data-type="<?= htmlspecialchars($sire['type']) ?>">
+            <?= htmlspecialchars($sire['name']) ?> (<?= htmlspecialchars($sire['number']) ?>)
+        </option>
+        <?php endforeach; ?>
+    </select>
+</div>                            
                             <h4 class="mt-4">Registration</h4>
                             
                             <div class="mb-3">
@@ -597,5 +596,61 @@ try {
         }
     });
     </script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Filter Dam and Sire options based on animal type
+    const typeSelect = document.getElementById('type');
+    const damSelect = document.getElementById('dam_id');
+    const sireSelect = document.getElementById('sire_id');
+    
+    // Store all original options
+    const damOptions = Array.from(damSelect.options);
+    const sireOptions = Array.from(sireSelect.options);
+    
+    function filterParentOptions() {
+        const selectedType = typeSelect.value;
+        
+        // Clear current options except the first "None Selected" option
+        while (damSelect.options.length > 1) {
+            damSelect.remove(1);
+        }
+        
+        while (sireSelect.options.length > 1) {
+            sireSelect.remove(1);
+        }
+        
+        // If no type is selected, don't add any options
+        if (!selectedType) {
+            return;
+        }
+        
+        // Add matching Dam options
+        damOptions.forEach(function(option) {
+            if (option.value === "" || option.dataset.type === selectedType) {
+                damSelect.add(option.cloneNode(true));
+            }
+        });
+        
+        // Add matching Sire options
+        sireOptions.forEach(function(option) {
+            if (option.value === "" || option.dataset.type === selectedType) {
+                sireSelect.add(option.cloneNode(true));
+            }
+        });
+    }
+    
+    // Set up event listener for type change
+    if (typeSelect) {
+        typeSelect.addEventListener('change', filterParentOptions);
+        
+        // Initial filter on page load if type is pre-selected
+        if (typeSelect.value) {
+            filterParentOptions();
+        }
+    }
+});
+</script>
+
 </body>
 </html>
