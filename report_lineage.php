@@ -136,21 +136,30 @@ $parentInfo = [
     'sire_sire' => null
 ];
 
+// Debug selected animal
+if ($animal) {
+    error_log("SELECTED ANIMAL: ID={$animal['id']}, Name={$animal['name']}, Dam ID={$animal['dam_id']}, Sire ID={$animal['sire_id']}");
+}
+
 if ($animal) {
     try {
         // Get dam (mother) information if dam_id exists
-        if (!empty($animal['dam_id'])) {
+        if (isset($animal['dam_id']) && !empty($animal['dam_id'])) {
+            $damId = $animal['dam_id'];
+            error_log("Getting dam info for dam_id=$damId");
+            
             $damStmt = $db->prepare("
                 SELECT id, name, number, breed, gender, status, dam_id, sire_id 
                 FROM animals 
                 WHERE id = :id AND user_id = :user_id
             ");
-            $damStmt->bindParam(':id', $animal['dam_id'], PDO::PARAM_INT);
+            $damStmt->bindParam(':id', $damId, PDO::PARAM_INT);
             $damStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
             $damStmt->execute();
             
             if ($damStmt->rowCount() > 0) {
                 $parentInfo['dam'] = $damStmt->fetch(PDO::FETCH_ASSOC);
+                error_log("Found dam: {$parentInfo['dam']['name']} (ID={$parentInfo['dam']['id']})");
                 
                 // Get maternal grandparents if available
                 if (!empty($parentInfo['dam']['dam_id'])) {
@@ -182,7 +191,11 @@ if ($animal) {
                         $parentInfo['dam_sire'] = $damSireStmt->fetch(PDO::FETCH_ASSOC);
                     }
                 }
+            } else {
+                error_log("No dam found for dam_id=$damId");
             }
+        } else {
+            error_log("Animal has no dam_id");
         }
         
         // Get sire (father) information if sire_id exists
@@ -508,11 +521,14 @@ include_once 'includes/header.php';
         <!-- Tree View -->
         <div class="ancestry-tree">
             <div class="row">
-                <!-- Main Animal -->
+                <!-- Main Animal - This is the actual animal being viewed -->
                 <div class="col-md-12 text-center mb-4">
                     <div class="card border-primary">
                         <div class="card-header bg-primary text-white">
-                            <h5 class="mb-0"><?= htmlspecialchars($animal['name']) ?> (<?= htmlspecialchars($animal['number']) ?>)</h5>
+                            <h5 class="mb-0">
+                                <!-- Ensure we're displaying the actual selected animal -->
+                                <?= htmlspecialchars($animal['name']) ?> (<?= htmlspecialchars($animal['number']) ?>)
+                            </h5>
                         </div>
                         <div class="card-body">
                             <p class="mb-1"><strong>Breed:</strong> <?= htmlspecialchars($animal['breed']) ?></p>
@@ -536,7 +552,7 @@ include_once 'includes/header.php';
                             <h5 class="mb-0">Dam (Mother)</h5>
                         </div>
                         <div class="card-body">
-                            <?php if ($parentInfo['dam']['id']): ?>
+                            <?php if (isset($parentInfo['dam']) && !empty($parentInfo['dam']['id'])): ?>
                             <h6 class="card-title"><?= htmlspecialchars($parentInfo['dam']['name']) ?> (<?= htmlspecialchars($parentInfo['dam']['number']) ?>)</h6>
                             <p class="mb-1"><strong>Breed:</strong> <?= htmlspecialchars($parentInfo['dam']['breed']) ?></p>
                             <p class="mb-1">
@@ -565,7 +581,7 @@ include_once 'includes/header.php';
                             <h5 class="mb-0">Sire (Father)</h5>
                         </div>
                         <div class="card-body">
-                            <?php if ($parentInfo['sire']['id']): ?>
+                            <?php if (isset($parentInfo['sire']) && !empty($parentInfo['sire']['id'])): ?>
                             <h6 class="card-title"><?= htmlspecialchars($parentInfo['sire']['name']) ?> (<?= htmlspecialchars($parentInfo['sire']['number']) ?>)</h6>
                             <p class="mb-1"><strong>Breed:</strong> <?= htmlspecialchars($parentInfo['sire']['breed']) ?></p>
                             <p class="mb-1">
