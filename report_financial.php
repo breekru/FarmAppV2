@@ -760,4 +760,87 @@ document.addEventListener('DOMContentLoaded', function() {
                 continue; // Skip incomplete transactions
             }
         ?>
-        csv.push(['<?= date('m/d/Y', strtotime($date)) ?>', '<?= $transactionType ?>', '<?= $transaction
+        csv.push(['<?= date('m/d/Y', strtotime($date)) ?>', '<?= $transactionType ?>', '<?= addslashes($transaction['name']) ?> (<?= addslashes($transaction['number']) ?>)', '<?= addslashes($transaction['type']) ?>', '$<?= number_format(abs($amount), 2) ?>']);
+        <?php endforeach; ?>
+        
+        // Convert array to CSV string
+        let csvContent = '';
+        csv.forEach(function(row) {
+            csvContent += row.join(',') + '\n';
+        });
+        
+        // Create download link
+        const encodedUri = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvContent);
+        const link = document.createElement('a');
+        link.setAttribute('href', encodedUri);
+        link.setAttribute('download', 'farm_financial_report_<?= date('Y-m-d') ?>.csv');
+        document.body.appendChild(link);
+        
+        // Trigger download
+        link.click();
+        
+        // Clean up
+        document.body.removeChild(link);
+    });
+});
+</script>
+
+<style>
+@media print {
+    .btn, button, .card-header button, .no-print {
+        display: none !important;
+    }
+    
+    .card {
+        border: none !important;
+        box-shadow: none !important;
+    }
+    
+    .card-header {
+        background-color: #fff !important;
+        border-bottom: 1px solid #000 !important;
+        color: #000 !important;
+    }
+    
+    .bg-success, .bg-danger, .bg-primary, .bg-info, .bg-secondary {
+        background-color: #fff !important;
+        color: #000 !important;
+    }
+    
+    .table {
+        border-collapse: collapse !important;
+    }
+    
+    .table td, .table th {
+        border: 1px solid #ddd !important;
+    }
+}
+</style>
+
+<?php
+/**
+ * Helper function to get appropriate badge class based on animal status
+ * 
+ * @param string $status Animal status
+ * @return string CSS class name for the badge
+ */
+function getStatusBadgeClass($status) {
+    switch ($status) {
+        case 'Alive':
+            return 'success';
+        case 'Dead':
+            return 'danger';
+        case 'Sold':
+            return 'info';
+        case 'For Sale':
+            return 'warning';
+        case 'Harvested':
+            return 'secondary';
+        default:
+            return 'primary';
+    }
+}
+
+// Include footer
+include_once 'includes/footer.php';
+?>
