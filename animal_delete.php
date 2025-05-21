@@ -1,9 +1,8 @@
 <?php
 /**
- * Animal Delete Script - Simplified Version
+ * Animal Delete Script - Enhanced Version
  * 
- * Handles the deletion of an animal record with minimal complexity
- * to ensure it works in your environment.
+ * Handles the deletion of an animal record along with associated medication and note entries.
  */
 
 // Enable error reporting for debugging
@@ -39,6 +38,9 @@ try {
     // Get database connection
     $db = getDbConnection();
     
+    // Start transaction for safe deletion of all related records
+    $db->beginTransaction();
+    
     // First, verify that the animal belongs to current user
     $verifyStmt = $db->prepare("
         SELECT id, type FROM animals 
@@ -59,6 +61,22 @@ try {
     // Get the animal type for redirection
     $animalType = $verifyStmt->fetch(PDO::FETCH_ASSOC)['type'];
     
+    // Delete the related medication entries
+    $deleteMedsStmt = $db->prepare("
+        DELETE FROM animal_medications 
+        WHERE animal_id = :animal_id
+    ");
+    $deleteMedsStmt->bindParam(':animal_id', $id, PDO::PARAM_INT);
+    $deleteMedsStmt->execute();
+    
+    // Delete the related note entries
+    $deleteNotesStmt = $db->prepare("
+        DELETE FROM animal_notes 
+        WHERE animal_id = :animal_id
+    ");
+    $deleteNotesStmt->bindParam(':animal_id', $id, PDO::PARAM_INT);
+    $deleteNotesStmt->execute();
+    
     // Delete the animal record
     $deleteStmt = $db->prepare("
         DELETE FROM animals 
@@ -68,16 +86,24 @@ try {
     $deleteStmt->bindParam(':user_id', $current_user, PDO::PARAM_STR);
     $deleteStmt->execute();
     
+    // Commit the transaction
+    $db->commit();
+    
     // Set success message
     $_SESSION['alert_message'] = "Animal deleted successfully.";
     $_SESSION['alert_type'] = "success";
     
     // Redirect based on animal type
-    $returnUrl = !empty($animalType) ? "index.php?type=" . urlencode($animalType) : "index.php";
+    $returnUrl = !empty($animalType) ? "animal_list.php?type=" . urlencode($animalType) : "animal_list.php";
     header("location: $returnUrl");
     exit;
     
 } catch (Exception $e) {
+    // Rollback the transaction on error
+    if (isset($db)) {
+        $db->rollBack();
+    }
+    
     // Log error and redirect with error message
     error_log('Animal Delete Error: ' . $e->getMessage());
     $_SESSION['alert_message'] = "An error occurred while deleting the animal: " . $e->getMessage();
