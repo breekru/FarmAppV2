@@ -298,7 +298,7 @@ include_once 'includes/header.php';
         </div>
     </div>
 </div>
-
+<?php include_once 'includes/mobile_tab_bar.php'; ?>
 <?php
 // Include footer
 include_once 'includes/footer.php';

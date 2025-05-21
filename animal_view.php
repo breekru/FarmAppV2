@@ -616,7 +616,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
-
+<?php include_once 'includes/mobile_tab_bar.php'; ?>
 <?php
 /**
  * Helper function to get appropriate badge class based on animal status
