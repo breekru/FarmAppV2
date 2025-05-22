@@ -1,8 +1,17 @@
 <?php
+/**
+ * Forgot Password Page - FIXED VERSION
+ * 
+ * Allows users to request a password reset link by entering their email address.
+ */
+
 // Include the configuration file
 require_once 'config.php';
 
-// 🔥 ADD PHPMAILER INCLUDES HERE 🔥
+// Include email configuration
+require_once 'email_config.php';
+
+// Include PHPMailer (adjust path as needed)
 // Option 1: If you installed via Composer
 // require_once 'vendor/autoload.php';
 
@@ -15,7 +24,7 @@ use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\SMTP;
 use PHPMailer\PHPMailer\Exception;
 
-// Continue with your existing code...
+// Initialize the session
 session_start();
 
 // Check if the user is already logged in, if yes then redirect to welcome page
@@ -46,15 +55,136 @@ function checkRateLimit($db, $email, $ip_address) {
     $stmt->execute();
     $email_count = $stmt->fetch()['count'];
     
-    // Also check by IP address (allow max 5 requests per IP per hour)
-    $stmt = $db->prepare("
-        SELECT COUNT(*) as count 
-        FROM password_reset_tokens 
-        WHERE created_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)
-        -- Note: You'd need to add an ip_address column to track this
-    ");
-    
     return $email_count >= 3; // Simple email-based rate limiting
+}
+
+/**
+ * Send password reset email using PHPMailer
+ * 
+ * @param string $to_email
+ * @param string $user_name
+ * @param string $reset_link
+ * @return bool
+ */
+function sendPasswordResetEmailPHPMailer($to_email, $user_name, $reset_link) {
+    try {
+        // Create a new PHPMailer instance
+        $mail = new PHPMailer(true);
+
+        // SMTP Configuration
+        $mail->isSMTP();
+        $mail->Host       = SMTP_HOST;
+        $mail->SMTPAuth   = true;
+        $mail->Username   = SMTP_USERNAME;
+        $mail->Password   = SMTP_PASSWORD;
+        $mail->SMTPSecure = (SMTP_SECURE === 'ssl') ? PHPMailer::ENCRYPTION_SMTPS : PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->Port       = SMTP_PORT;
+
+        // Enable debug output if configured
+        if (defined('SMTP_DEBUG') && SMTP_DEBUG) {
+            $mail->SMTPDebug = SMTP::DEBUG_SERVER;
+        }
+
+        // Email settings
+        $mail->setFrom(FROM_EMAIL, FROM_NAME);
+        $mail->addAddress($to_email, $user_name);
+        $mail->addReplyTo(REPLY_TO_EMAIL, FROM_NAME . ' Support');
+
+        // Content
+        $mail->isHTML(true);
+        $mail->Subject = 'Password Reset Request - FarmApp';
+        
+        $mail->Body = "
+        <html>
+        <head>
+            <title>Password Reset Request</title>
+            <style>
+                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                .header { text-align: center; margin-bottom: 30px; }
+                .header h1 { color: #198754; }
+                .button { 
+                    background-color: #198754; 
+                    color: white; 
+                    padding: 12px 25px; 
+                    text-decoration: none; 
+                    border-radius: 5px; 
+                    display: inline-block; 
+                    margin: 20px 0;
+                }
+                .warning { background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0; }
+                .footer { font-size: 12px; color: #666; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; }
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <h1>FarmApp</h1>
+                </div>
+                
+                <h2>Password Reset Request</h2>
+                
+                <p>Hello " . htmlspecialchars($user_name) . ",</p>
+                
+                <p>We received a request to reset your FarmApp password. If you made this request, please click the button below to reset your password:</p>
+                
+                <div style='text-align: center;'>
+                    <a href='" . htmlspecialchars($reset_link) . "' class='button'>Reset My Password</a>
+                </div>
+                
+                <div class='warning'>
+                    <p><strong>Important Security Information:</strong></p>
+                    <ul>
+                        <li>This link will expire in 1 hour for security reasons</li>
+                        <li>If you didn't request this password reset, you can safely ignore this email</li>
+                        <li>Your password will not be changed unless you click the link above and complete the reset process</li>
+                    </ul>
+                </div>
+                
+                <p>If the button above doesn't work, you can copy and paste the following link into your browser:</p>
+                <p style='word-break: break-all; background-color: #f8f9fa; padding: 10px; border-radius: 4px; font-family: monospace;'>
+                    " . htmlspecialchars($reset_link) . "
+                </p>
+                
+                <div class='footer'>
+                    <p>This email was sent from FarmApp. If you have any questions or concerns, please contact our support team.</p>
+                    <p>This is an automated message, please do not reply to this email.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        ";
+
+        // Alternative text body for email clients that don't support HTML
+        $mail->AltBody = "
+        FarmApp Password Reset Request
+
+        Hello $user_name,
+
+        We received a request to reset your FarmApp password. If you made this request, please visit the following link to reset your password:
+
+        $reset_link
+
+        Important:
+        - This link will expire in 1 hour for security reasons
+        - If you didn't request this password reset, you can safely ignore this email
+        - Your password will not be changed unless you visit the link above and complete the reset process
+
+        If you have any questions, please contact our support team.
+
+        This is an automated message, please do not reply to this email.
+        ";
+
+        // Send the email
+        $mail->send();
+        return true;
+
+    } catch (Exception $e) {
+        // Log the error
+        error_log("PHPMailer Error: {$mail->ErrorInfo}");
+        error_log("Exception: " . $e->getMessage());
+        return false;
+    }
 }
 
 // Processing form data when form is submitted
@@ -106,11 +236,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                             $insert_stmt->bindParam(':expires_at', $expires_at, PDO::PARAM_STR);
                             
                             if ($insert_stmt->execute()) {
-                                // Send password reset email
+                                // Send password reset email using PHPMailer
                                 $reset_link = "http://" . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF']) . "/reset_password.php?token=" . $token;
                                 $user_name = $user['f_name'] . ' ' . $user['l_name'];
                                 
-                                if (sendPasswordResetEmail($email, $user_name, $reset_link)) {
+                                // FIXED: Call the correct function name
+                                if (sendPasswordResetEmailPHPMailer($email, $user_name, $reset_link)) {
                                     $success = true;
                                 } else {
                                     $email_err = "Failed to send password reset email. Please try again later.";
@@ -132,94 +263,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             }
         }
     }
-}
-
-/**
- * Send password reset email
- * 
- * @param string $to_email
- * @param string $user_name
- * @param string $reset_link
- * @return bool
- */
-require_once 'email_config.php';
-
-function sendPasswordResetEmailPHPMailer($to_email, $user_name, $reset_link) {
-    try {
-        $mail = new PHPMailer(true);
-
-        // Use configuration constants
-        $mail->isSMTP();
-        $mail->Host       = SMTP_HOST;
-        $mail->SMTPAuth   = true;
-        $mail->Username   = SMTP_USERNAME;
-        $mail->Password   = SMTP_PASSWORD;
-        $mail->SMTPSecure = (SMTP_SECURE === 'ssl') ? PHPMailer::ENCRYPTION_SMTPS : PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port       = SMTP_PORT;
-
-        $mail->setFrom(FROM_EMAIL, FROM_NAME);
-        $mail->addAddress($to_email, $user_name);
-        $mail->addReplyTo(REPLY_TO_EMAIL, FROM_NAME . ' Support');
-
-    $subject = "Password Reset Request - FarmApp";
-    
-    $message = "
-    <html>
-    <head>
-        <title>Password Reset Request</title>
-    </head>
-    <body style='font-family: Arial, sans-serif; line-height: 1.6; color: #333;'>
-        <div style='max-width: 600px; margin: 0 auto; padding: 20px;'>
-            <div style='text-align: center; margin-bottom: 30px;'>
-                <h1 style='color: #198754;'>FarmApp</h1>
-            </div>
-            
-            <h2>Password Reset Request</h2>
-            
-            <p>Hello " . htmlspecialchars($user_name) . ",</p>
-            
-            <p>We received a request to reset your FarmApp password. If you made this request, please click the link below to reset your password:</p>
-            
-            <div style='text-align: center; margin: 30px 0;'>
-                <a href='" . htmlspecialchars($reset_link) . "' 
-                   style='background-color: #198754; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; display: inline-block;'>
-                   Reset My Password
-                </a>
-            </div>
-            
-            <p><strong>Important:</strong></p>
-            <ul>
-                <li>This link will expire in 1 hour for security reasons</li>
-                <li>If you didn't request this password reset, you can safely ignore this email</li>
-                <li>Your password will not be changed unless you click the link above and complete the reset process</li>
-            </ul>
-            
-            <p>If the button above doesn't work, you can copy and paste the following link into your browser:</p>
-            <p style='word-break: break-all; background-color: #f8f9fa; padding: 10px; border-radius: 4px;'>
-                " . htmlspecialchars($reset_link) . "
-            </p>
-            
-            <hr style='margin: 30px 0; border: none; border-top: 1px solid #ddd;'>
-            
-            <p style='font-size: 12px; color: #666;'>
-                This email was sent from FarmApp. If you have any questions or concerns, please contact our support team.
-            </p>
-        </div>
-    </body>
-    </html>
-    ";
-
-    // Email headers
-    $headers = array(
-        'MIME-Version: 1.0',
-        'Content-type: text/html; charset=utf-8',
-        'From: FarmApp <noreply@' . $_SERVER['HTTP_HOST'] . '>',
-        'Reply-To: noreply@' . $_SERVER['HTTP_HOST'],
-        'X-Mailer: PHP/' . phpversion()
-    );
-
-    // Send email
-    return mail($to_email, $subject, $message, implode("\r\n", $headers));
 }
 
 // Set page variables
