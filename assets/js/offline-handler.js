@@ -8,9 +8,9 @@ class OfflineHandler {
     }
 
     init() {
-        // Register service worker
+        // Register service worker - FIX THE PATH
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/service-worker.js')
+            navigator.serviceWorker.register('/service-worker.js') // Make sure this path is correct
                 .then(registration => {
                     console.log('Service Worker registered:', registration);
                     this.serviceWorkerRegistration = registration;
@@ -19,19 +19,19 @@ class OfflineHandler {
                     console.error('Service Worker registration failed:', error);
                 });
         }
-
+    
         // Listen for online/offline events
         window.addEventListener('online', () => {
             this.isOnline = true;
             this.updateConnectionStatus();
             this.syncOfflineData();
         });
-
+    
         window.addEventListener('offline', () => {
             this.isOnline = false;
             this.updateConnectionStatus();
         });
-
+    
         // Initial status update
         this.updateConnectionStatus();
         
