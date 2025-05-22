@@ -1,6 +1,6 @@
 <?php
 /**
- * Login Page
+ * Login Page - Updated with Forgot Password Link
  * 
  * Handles user authentication.
  */
@@ -164,6 +164,13 @@ $page_title = "Login";
             opacity: 0.3;
             z-index: -1;
         }
+        .forgot-password-link {
+            color: #0d6efd;
+            text-decoration: none;
+        }
+        .forgot-password-link:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
@@ -218,7 +225,12 @@ $page_title = "Login";
                     </div>
                     
                     <div class="text-center">
-                        <p class="mb-0">Don't have an account? <a href="register.php">Sign up now</a></p>
+                        <p class="mb-2">Don't have an account? <a href="register.php">Sign up now</a></p>
+                        <p class="mb-0">
+                            <a href="forgot_password.php" class="forgot-password-link">
+                                <i class="bi bi-key me-1"></i> Forgot your password?
+                            </a>
+                        </p>
                     </div>
                 </form>
             </div>

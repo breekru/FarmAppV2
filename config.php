@@ -5,7 +5,7 @@
  * This file contains database connection settings and utility functions
  * for connecting to the database.
  */
-
+require_once 'security_config.php';
 // Use environment variables or a .env file in production
 define('DB_SERVER', 'localhost');
 define('DB_USERNAME', 'blkfarms_connect');
