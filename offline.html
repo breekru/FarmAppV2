@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offline - FarmApp</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .offline-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .offline-card {
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            padding: 40px 30px;
+        }
+        
+        .offline-icon {
+            font-size: 4rem;
+            color: #6c757d;
+            margin-bottom: 20px;
+        }
+        
+        .offline-title {
+            color: #495057;
+            margin-bottom: 15px;
+        }
+        
+        .offline-description {
+            color: #6c757d;
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+        
+        .quick-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .action-button {
+            padding: 12px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .action-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        .connection-status {
+            margin-top: 20px;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+        }
+        
+        .status-online {
+            background-color: #d1edff;
+            color: #0c5460;
+            border: 1px solid #b6effb;
+        }
+        
+        .status-offline {
+            background-color: #fff3cd;
+            color: #664d03;
+            border: 1px solid #ffecb5;
+        }
+        
+        @media (max-width: 576px) {
+            .offline-card {
+                padding: 30px 20px;
+            }
+            
+            .offline-icon {
+                font-size: 3rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="offline-container">
+        <div class="offline-card">
+            <div class="offline-icon">
+                <i class="bi bi-wifi-off"></i>
+            </div>
+            
+            <h2 class="offline-title">You're Offline</h2>
+            
+            <p class="offline-description">
+                It looks like you're not connected to the internet right now. 
+                Don't worry - you can still use FarmApp's quick add feature to record animals offline!
+            </p>
+            
+            <div class="quick-actions">
+                <a href="/quick_add.php" class="action-button btn btn-primary">
+                    <i class="bi bi-plus-circle me-2"></i>
+                    Quick Add Animal (Offline Mode)
+                </a>
+                
+                <button onclick="window.location.reload()" class="action-button btn btn-outline-secondary">
+                    <i class="bi bi-arrow-clockwise me-2"></i>
+                    Try Again
+                </button>
+                
+                <a href="/" class="action-button btn btn-outline-primary">
+                    <i class="bi bi-house me-2"></i>
+                    Go to Homepage
+                </a>
+            </div>
+            
+            <div id="connection-status" class="connection-status status-offline">
+                <i class="bi bi-wifi-off me-2"></i>
+                <span id="status-text">No internet connection</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Monitor connection status
+        function updateConnectionStatus() {
+            const statusDiv = document.getElementById('connection-status');
+            const statusText = document.getElementById('status-text');
+            
+            if (navigator.onLine) {
+                statusDiv.className = 'connection-status status-online';
+                statusDiv.innerHTML = '<i class="bi bi-wifi me-2"></i><span>Back online! You can now sync your data.</span>';
+                
+                // Show reload button or auto-reload after a delay
+                setTimeout(() => {
+                    const reloadButton = document.createElement('button');
+                    reloadButton.className = 'btn btn-sm btn-outline-primary mt-2';
+                    reloadButton.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Reload App';
+                    reloadButton.onclick = () => window.location.reload();
+                    statusDiv.appendChild(reloadButton);
+                }, 1000);
+            } else {
+                statusDiv.className = 'connection-status status-offline';
+                statusDiv.innerHTML = '<i class="bi bi-wifi-off me-2"></i><span>No internet connection</span>';
+            }
+        }
+        
+        // Initial status check
+        updateConnectionStatus();
+        
+        // Listen for connection changes
+        window.addEventListener('online', updateConnectionStatus);
+        window.addEventListener('offline', updateConnectionStatus);
+        
+        // Check connection periodically
+        setInterval(() => {
+            // Try to fetch a small resource to verify connection
+            fetch('/favicon.ico', { 
+                method: 'HEAD',
+                mode: 'no-cors',
+                cache: 'no-cache'
+            }).then(() => {
+                if (!navigator.onLine) {
+                    // Connection is back but navigator.onLine hasn't updated yet
+                    window.location.reload();
+                }
+            }).catch(() => {
+                // Still offline
+            });
+        }, 5000);
+    </script>
+</body>
+</html>
