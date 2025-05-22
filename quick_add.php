@@ -206,7 +206,7 @@ $justAdded = isset($_GET['success']) && $_GET['success'] == '1';
     <link rel="stylesheet" href="assets/css/styles.css">
     
     <!-- Favicon -->
-    <link rel="icon" type="image/ico" href="assets/img/favicon.ico">
+    <link rel="icon" type="image/ico" href="assets/img/favicon.png">
     
     <style>
         /* Enhanced mobile-optimized styles */
